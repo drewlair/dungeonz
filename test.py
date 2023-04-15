@@ -22,6 +22,18 @@ swing = False
 charX_pos = 100
 charY_pos = 100
 
+
+
+
+
+
+
+
+
+
+
+
+
 background_surf = pygame.image.load('startBackground.jpeg')
 
 while True:
@@ -34,13 +46,13 @@ while True:
                 swing = True
                 eSwing = 0
             elif event.key == pygame.K_w:
-                charY_pos -= 5
+                charY_pos -= 30
             elif event.key == pygame.K_a:
-                charX_pos -= 5
+                charX_pos -= 30
             elif event.key == pygame.K_s:
-                charY_pos += 5
+                charY_pos += 30
             elif event.key == pygame.K_d:
-                charX_pos += 5
+                charX_pos += 30
 
                   
 
