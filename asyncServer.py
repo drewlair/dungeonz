@@ -14,12 +14,6 @@ gameClock = -1
 
 
 def gameInit(client, clientKey):
-
-
-
-
-
-
     pass
 
 
@@ -76,8 +70,6 @@ def gameStateUpdate(client, updates, serverSock):
 
     pass
 
-
-
 def main():
 
     players = {}
@@ -93,9 +85,11 @@ def main():
         print("Must enter port listening on")
         sys.exit()
 
+    # create UDP socket with timeout of 1 second 
     serverSock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     serverSock.settimeout(1)
 
+    # tries to bind the socket to the port with a 5 second delay if errors
     while True:
         try:
             serverSock.bind( (socket.gethostname(), port) )
@@ -107,11 +101,12 @@ def main():
         print(f"connected to {socket.gethostname()} at port {str(port)}")
 
     
+    # list of clients
     clients = []
     
-
     clientHandler = ThreadPoolExecutor(MAX_THREADS)
 
+    # register server socket for input events
     poller = select.poll()
     poller.register(serverSock, select.POLLIN)
 
@@ -120,6 +115,8 @@ def main():
         try:
             
             #readable, _, _ = select.select( inputs, [],  [], 1 )
+            
+            # polls for events
             events = poller.poll(5000)
             
 
@@ -138,8 +135,11 @@ def main():
                 if sock == serverSock.fileno():
 
                 #client, address = sock.accept()
+                
+                    # if the socket that generated the event is the server socket, recv message from client
                     try:
                         length, client = serverSock.recvfrom(8)
+                        clients.append(client)
                     except:
                         print("Error receiving req from client")
                         continue
@@ -148,18 +148,22 @@ def main():
                     print("client is:")
                     print(client)
 
+                    # decode message to get the length
                     length = int(length.decode())
+                    print(length)
                     
-
+                    # try to receive full message
+                    # TODO
                     try:
-                        msg, client = serverSock.recvfrom(length)
-                    except:
+                        msg_data, client = serverSock.recvfrom(length)
+                        msg = msg_data.decode('utf-8')
+                    except Exception as e:
                         print("Issue receiving initialized state")
                         continue
+                    
                     msg = json.loads(msg)
+                    print(msg)
                     if client in clients:
-
-                        
                         print("gotmessage")
                         
 
@@ -194,12 +198,6 @@ def main():
                         gameStateUpdate(msg, client, serverSock)
 
 
-
-
-
-                
-
-
 def msgLength(msg):
     length = str(len(msg))
     for i in range(8 - len(str(length))):
@@ -209,4 +207,5 @@ def msgLength(msg):
 
 if __name__ == "__main__":
     main()
+        
         
