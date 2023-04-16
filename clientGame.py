@@ -6,10 +6,8 @@ import time
 import json
 import random
 
-
-
 def main():
-    print("INmain")
+    print("in main")
     try:
         port = int(sys.argv[1])
     except:
@@ -44,14 +42,17 @@ def main():
     print("past images")
 
     gameState = {}
-    gameState["playerKey"] = str(random.randint(0,10000000000))
+    
+    # init default gameState
+    
+    # each player gets own key 
+    gameState["playerKey"] = str(random.randint(0,100000000000000))
     gameState["background"] = "background_surf"
     gameState["borders"] = (xBorderMax, yBorderMax)
     gameState["character"] = "stanceRightMain"
     gameState["characterStats"] = {"hp": 100, "gold": 0, "xp": 0, "lvl": 0, "XY": (charX_pos, charY_pos)}
-    
     print("past json inits")
-
+    
     backgrounds = {}
     backgrounds[gameState["background"]] = background_surf
 
@@ -68,12 +69,10 @@ def main():
 
 
     # establish server connection
-
     clientSock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     clientSock.settimeout(5)
     host = platform.node()
    
-        
     print(f"Successfully connected to {host} at port {str(port)}")
 
     msg = json.dumps(gameState)
@@ -87,11 +86,11 @@ def main():
         print("past length")
         
         clientSock.sendto(msg.encode(), (host, port))
+        print('sent initialized state to server!')
 
     except:
         print("Failed to send initialized state to server")
         sys.exit()
-
 
     try:
         length, client = clientSock.recvfrom(8)
@@ -108,14 +107,10 @@ def main():
         print("lets play!")
     else:
         sys.exit()
-    
+   
     screen.blit(backgrounds[gameState["background"]], (0,0))
     screen.blit(characterImages[gameState["character"]], (500,350))
-
-
-
     
-
     while True:
 
 
@@ -277,11 +272,5 @@ def msgLength(msg):
         length = "0" + length
     return length
 
-
-
-
-
 if __name__ == "__main__":
     main()
-
-
