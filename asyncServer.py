@@ -5,66 +5,124 @@ import time
 import sys
 import select
 import json
+from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
 
 globalGame = {}
 localGames = {}
 MOVESPEED = 30
 gameClock = -1
+clientClock = {}
+swingTime = 0.5
 
 
-def gameInit(client, clientKey):
-    pass
+def gameInit(client, playerKey):
+
+    globalGame[playerKey] = {}
+    globalGame[playerKey]["background"] = "background_surf"
+    globalGame[playerKey]["characterStats"] = {"hp": 100, "gold": 0, "xp": 0, "lvl": 0, "XY": (100, 100)}
+    globalGame[playerKey]["character"] = "stanceRightMain"
+    globalGame[playerKey]["isSwinging"] = False
+    globalGame[playerKey]["monsters"] = {}
+    clientClock[playerKey] = time.time_ns()
 
 
-def gameStateUpdate(client, updates, serverSock):
+    return
 
-    updateRes = {}
-    clientKey = msg["clientKey"]
-    for key in updates.keys():
+def updateSwing(swingData):
+    currTime = time.time_ns() / 10**9
+    startTime = swingData[1] / 10**9
+    elapsedSwing = currTime - startTime
+    if elapsedSwing  < (swingTime / 5):
+        return "swingRightStart"
+    elif elapsedSwing < (swingTime / 5)*2:
+        return "swingRightMid"
+    elif elapsedSwing < (swingTime / 5)*3:
+        return "swingRightUp"
+    elif elapsedSwing < (swingTime / 5)*4:
+        return "swingRightFinish"
+    elif elapsedSwing <= swingTime:
+        return "swingRightFinal"
+    else:
+        return None
 
-        if key == "type":
 
-            if msg[key] == "moveUp":
-                
-                xy = globalGame[clientKey]["characterStats"]["XY"]
-                globalGame[clientKey]["characterStats"]["XY"] = (xy[0], (xy[1] -  MOVESPEED))
-                updateRes["characterStats"]["XY"] = (xy[0], (xy[1] -  MOVESPEED))
-                
+    
 
-            elif msg[key] == "moveRight":
-                
-                xy = globalGame[msg["clientKey"]]["characterStats"]["XY"]
-                globalGame[clientKey]["characterStats"]["XY"] = ((xy[0] + MOVESPEED), xy[1])
-                updateRes["characterStats"]["XY"] = ((xy[0] + MOVESPEED), xy[1])
-                
 
-            elif msg[key] == "moveDown":
-                xy = globalGame[clientKey]["characterStats"]["XY"]
-                globalGame[clientKey]["characterStats"]["XY"] = (xy[0], (xy[1] +  MOVESPEED))
-                updateRes["characterStats"]["XY"] = (xy[0], (xy[1] +  MOVESPEED))
-                
-
-            elif msg[key] == "moveLeft":
-                xy = globalGame[clientKey]["characterStats"]["XY"]
-                globalGame[clientKey]["characterStats"]["XY"] = ((xy[0] - MOVESPEED), xy[1])
-                updateRes["characterStats"]["XY"] = ((xy[0] - MOVESPEED), xy[1])
-
-                
-            elif msg["swing"]:
-                globalGame[msg["clientKey"]] = ("swingRightStart", 0)
+def gameStateUpdate(updates, client, serverSock):
+    print("in game state update")
+    updateRes = defaultdict(dict)
+    
+    clientKey = updates["playerKey"]
+    if updates["status"] == "CHECK":
+        
+        print("check update")
+        if globalGame[clientKey]["isSwinging"]:
+            swing = updateSwing(globalGame[clientKey]["character"])
+            if not swing:
+                globalGame[clientKey]["isSwinging"] = False
+                globalGame[clientKey]["character"] = "stanceRightMain"
                 updateRes["character"] = "swingRightStart"
+            else:
+                globalGame[clientKey]["character"] = (swing, globalGame[clientKey]["character"][1])
+                updateRes["character"] = globalGame[clientKey]["character"][0]
+    elif updates["status"] == "INPUT":
+        for key in updates.keys():
+
+            if key == "type":
+
+                if updates[key] == "moveUp":
+                    
+                    xy = globalGame[clientKey]["characterStats"]["XY"]
+                    globalGame[clientKey]["characterStats"]["XY"] = (xy[0], (xy[1] -  MOVESPEED))
+                    updateRes["characterStats"]["XY"] = (xy[0], (xy[1] -  MOVESPEED))
+                    
+
+                elif updates[key] == "moveRight":
+                    print(globalGame)
+                    xy = globalGame[clientKey]["characterStats"]["XY"]
+                    globalGame[clientKey]["characterStats"]["XY"] = ((xy[0] + MOVESPEED), xy[1])
+                    updateRes["characterStats"]["XY"] = ((xy[0] + MOVESPEED), xy[1])
+                    
+
+                elif updates[key] == "moveDown":
+                    xy = globalGame[clientKey]["characterStats"]["XY"]
+                    globalGame[clientKey]["characterStats"]["XY"] = (xy[0], (xy[1] +  MOVESPEED))
+                    updateRes["characterStats"]["XY"] = (xy[0], (xy[1] +  MOVESPEED))
+                    
+
+                elif updates[key] == "moveLeft":
+                    xy = globalGame[clientKey]["characterStats"]["XY"]
+                    globalGame[clientKey]["characterStats"]["XY"] = ((xy[0] - MOVESPEED), xy[1])
+                    updateRes["characterStats"]["XY"] = ((xy[0] - MOVESPEED), xy[1])
+
+                    
+                elif updates[key] == "swing":
+                    if globalGame[clientKey]["isSwinging"]:
+                        swing = updateSwing(globalGame[clientKey]["character"])
+                        if not swing:
+                            globalGame[clientKey]["isSwinging"] = False
+                            globalGame[clientKey]["character"] = "stanceRightMain"
+                            updateRes["character"] = "swingRightStart"
+                        else:
+                            globalGame[clientKey]["character"] = (swing, globalGame[clientKey]["character"][1])
+                            updateRes["character"] = globalGame[clientKey]["character"][0]
+                    else:
+                        globalGame[clientKey]["isSwinging"] = True
+                        globalGame[clientKey]["character"] = ("swingRightStart", time.time_ns())
+                        updateRes["character"] = globalGame[clientKey]["character"][0]
 
 
-        localGames[clientKey] = globalGame
+        
 
     
     try:
         msg = json.dumps(updateRes)
 
-        serverSock.sendto(msgLength(msg), client)
+        serverSock.sendto((msgLength(msg)).encode("utf-8"), client)
 
-        serverSock.sendto(msg, client)
+        serverSock.sendto(msg.encode("utf-8"), client)
     except:
         print("problem sending data from thread to client")
 
@@ -126,57 +184,58 @@ def main():
         for sock, evt in events:
             if evt and select.POLLIN:
                 
-                print("hello")
-                print(sock)
-                print(serverSock)
-                print(evt)
-                print(select.POLLIN)
+                
                 
                 if sock == serverSock.fileno():
 
-                #client, address = sock.accept()
+                
                 
                     # if the socket that generated the event is the server socket, recv message from client
                     try:
                         length, client = serverSock.recvfrom(8)
-                        clients.append(client)
+                    
+                        
                     except:
                         print("Error receiving req from client")
                         continue
                     
                     
-                    print("client is:")
-                    print(client)
+                   
 
                     # decode message to get the length
                     length = int(length.decode())
-                    print(length)
+                    
                     
                     # try to receive full message
-                    # TODO
+                    
                     try:
                         msg_data, client = serverSock.recvfrom(length)
+                      
                         msg = msg_data.decode('utf-8')
                     except Exception as e:
                         print("Issue receiving initialized state")
                         continue
+                    if msg != "CHECK":
+                        msg = json.loads(msg)
                     
-                    msg = json.loads(msg)
-                    print(msg)
-                    if client in clients:
-                        print("gotmessage")
+                    if client not in clients:
                         
+                        clients.append(client)
 
                         players[msg["playerKey"]] = msg
 
-                        res = "OK"
+                        res = "GOOD"
+
+                        gameInit(client, msg["playerKey"])
 
                         try:
+                            
                             length = msgLength(msg)
-                            print(length)
+                         
                             serverSock.sendto(length.encode(), client)
-
+                      
                             serverSock.sendto(res.encode(), client)
+                   
 
                         
                         except:
@@ -184,16 +243,7 @@ def main():
                             continue
 
                     else:
-                        print("in correct spot")
-                        try:
-                            length, client = sock.recvfrom(8)
-                            length = int(length.decode())
-                            msg, client = sock.recvfrom(length)
-                            msg = json.loads(msg.decode())
-                            
-                        except:
-                            print("Issue receiving initialized state")
-                            continue
+                      
                     
                         gameStateUpdate(msg, client, serverSock)
 
