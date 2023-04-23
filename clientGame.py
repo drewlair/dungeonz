@@ -66,25 +66,33 @@ def main():
     gameState["borders"] = (xBorderMax, yBorderMax)
     gameState["character"] = "stanceRightMain"
     gameState["characterStats"] = {"hp": 100, "gold": 0, "xp": 0, "lvl": 0, "XY": (charX_pos, charY_pos)}
+    gameState["status"] = "INIT"
 
     
 
 
     # establish server connection
-    clientSock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    clientSock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     clientSock.settimeout(5)
     host = platform.node()
    
     print(f"Successfully connected to {host} at port {str(port)}")
 
+    try:
+        clientSock.connect((host, port))
+    except:
+        print("Error connecting to server")
+
     msg = json.dumps(gameState)
     
     try:
         
-        host = platform.node()
-        clientSock.sendto((msgLength(msg)).encode(), (host, port))
+        #print(f"about to send {msg}")
+        print(f"with length {msgLength(msg)}")
+        length = msgLength(msg)
+        clientSock.sendall(length.encode("utf-8"))
         
-        clientSock.sendto(msg.encode(), (host, port))
+        clientSock.sendall(msg.encode("utf-8"))
         
 
     except:
@@ -92,20 +100,53 @@ def main():
         sys.exit()
 
     try:
-        length, client = clientSock.recvfrom(8)
+        length = clientSock.recv(8)
         
         length = int(length.decode())
 
-        msg, client = clientSock.recvfrom(length)
+        msg = clientSock.recv(length)
         
         msg = msg.decode()
 
     except:
         print("Error receiving update from server 1")
         sys.exit()
-    if msg == "GOOD":
+
+    msg = json.loads(msg)
+
+    threadSock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    threadSock.settimeout(5)
+    host = msg["host"]
+    port = msg["port"]
+    try:
+        print(f"host is {host}, {port}")
+        threadSock.connect((msg["host"], int(msg["port"])))
+        print("Connected to thread")
+    except:
+        print("Error conncting to server Thread")
+        return False
+    msg = "INIT"
+    length = msgLength(msg)
+    try:
+        threadSock.sendall(length.encode("utf-8"))
+        threadSock.sendall(msg.encode("utf-8"))
+    except:
+        print("Error sending init to thread")
+        return False
+    
+    try:
+        length = threadSock.recv(8)
+        length = int(length.decode())
+        msg = threadSock.recv(length)
+    except:
+        print("Error receiving start msg from thread server")
+        return False
+    msg = msg.decode()
+    if msg == "START":
         print("lets play!")
     else:
+        print("msg not start")
+        print(msg)
         sys.exit()
    
     #screen.blit(backgrounds[gameState["background"]], (0,0))
@@ -145,7 +186,7 @@ def main():
                     update["type"] = "moveRight"
 
 
-        ######################################
+        ####################################
 
 
             
@@ -158,20 +199,21 @@ def main():
             length = msgLength(msg)
             try:
                 print("sending check")
-                clientSock.sendto(length.encode(), (host, port))
+                threadSock.sendall(length.encode())
 
-                clientSock.sendto(msg.encode(), (host, port))
+                threadSock.sendall(msg.encode())
 
             except:
                 print("Failed to send CHECK to state to server")
+                
 
         else:
             msg = json.dumps(update)
             length = msgLength(msg)
             try:
-                clientSock.sendto(length.encode(), (host, port))
+                threadSock.sendall(length.encode())
 
-                clientSock.sendto(msg.encode(), (host, port))
+                threadSock.sendall(msg.encode())
 
             except:
                 print("Failed to send updated state to server")
@@ -184,11 +226,11 @@ def main():
         #Receive new Game State from server
 
         try:
-            length, client = clientSock.recvfrom(8)
+            length = threadSock.recv(8)
 
             length = int(length.decode())
             
-            update, client = clientSock.recvfrom(length)
+            update = threadSock.recv(length)
             
             update = update.decode()
             
