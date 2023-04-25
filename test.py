@@ -201,6 +201,7 @@ eSwing = 0
 facing_right = True
 swing = False
 swing_cooldown_timer = 0
+attack_speed = 50
 
 # Slime Variables
 slime_surf = pygame.image.load('slime.jpg')
@@ -252,7 +253,7 @@ def spawn_mobs(wave, type):
         x = random.randint(0, screen_width - mob_width)
         y = random.randint(0, screen_height - mob_height)
         mob_rect = mob_surf.get_rect(topleft=(x, y))
-        custom_hitbox = create_custom_hitbox(mob_rect, 10, 10)
+        custom_hitbox = create_custom_hitbox(mob_rect, 5, 5)
         mobs.append({'rect': mob_rect, 'hitbox': custom_hitbox, 'dx': 0, 'dy': 0, 'health': mob_health, 'exp' : mob_exp})
     
     return mobs
@@ -274,7 +275,7 @@ while True:
             if event.key == pygame.K_SPACE and swing_cooldown_timer == 0:
                 swing = True
                 eSwing = 0
-                swing_cooldown_timer = 45
+                swing_cooldown_timer = attack_speed
             elif event.key == pygame.K_a:
                 facing_right = False
             elif event.key == pygame.K_d:
@@ -307,7 +308,7 @@ while True:
     
     mobs = slimes + bats
     for mob in mobs:
-        if swing and any(s_surf.get_rect(center=(charX_pos, charY_pos)).colliderect(mob['hitbox']) for s_surf in [s1_surf, s2_surf, s3_surf, s4_surf, s5_surf]):
+        if swing and any(create_custom_hitbox(s_surf.get_rect(center=(charX_pos, charY_pos)), -5, -5).colliderect(mob['hitbox']) for s_surf in [s1_surf, s2_surf, s3_surf, s4_surf, s5_surf]):
             mob['health'] -= 1
             if mob['health'] <= 0:
                 if mob in slimes:
@@ -320,7 +321,7 @@ while True:
                 level_up_sound.play()
                 
                 # upgrade_choice = input("You have gained 100 experience points! Enter 1 to restore some health, 2 to increase speed, or 3 to upgrade weapon:")
-                upgrade_text = upgrade_font.render("You have gained 100 experience points! Enter 1 to restore health, 2 to increase speed, or 3 to upgrade weapon", True, (255, 255, 255))
+                upgrade_text = upgrade_font.render("You have gained 100 experience points! Enter 1 to restore health, 2 to increase speed, or 3 to increase attack speed", True, (255, 255, 255))
                 upgrade_rect = upgrade_text.get_rect(center=(screen_width // 2, screen_height // 2))
                 
                 pygame.event.clear()
@@ -343,8 +344,12 @@ while True:
                                 char_speed += 1
                                 flag = False
                             elif event.key == pygame.K_3:
+                                if attack_speed >= 10:
+                                    attack_speed -= 8
                                 flag = False
-                                pass
+                
+                keys = {pygame.K_w: False, pygame.K_s: False, pygame.K_a: False, pygame.K_d: False}
+
                                 
                 pygame.event.clear()
             
