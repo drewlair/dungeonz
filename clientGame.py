@@ -1,17 +1,22 @@
 import pygame
 import sys
 import socket
-import platform
 import time
 import json
 import random
+from collections import defaultdict
 
 def main():
     print("in main")
     try:
-        port = int(sys.argv[1])
+        port = int(sys.argv[2])
     except:
         print("Bad arguments! Must add one correct port!")
+        sys.exit()
+    try:
+        host = sys.argv[1]
+    except:
+        print("Need to enter hostname")
         sys.exit()
 
 
@@ -21,7 +26,7 @@ def main():
     xBorderMax = 1000
     yBorderMax = 700
     print("bf screen")
-    screen = pygame.display.set_mode((0,0)) #pygame.FULLSCREEN
+    screen = pygame.display.set_mode((xBorderMax,yBorderMax)) #pygame.FULLSCREEN
     print("past screen display")
 
     clock = pygame.time.Clock()
@@ -35,19 +40,15 @@ def main():
     swingRightFinish = pygame.image.load('swingRightFinish.png')
     swingRightFinal = pygame.image.load('swingRightFinal.png')
     background_surf = pygame.image.load('startBackground.jpeg')
-    eSwing = 0
-    swing = False
+    slime_surf = pygame.image.load('slime.png')
+    slime_width, slime_height = slime_surf.get_size()
+    
     charX_pos = 100
     charY_pos = 100
     
-    gameState = {}
+    gameState = defaultdict(dict)
     
     # init default gameState
-    
-    
-    
-    backgrounds = {}
-   
 
     characterImages = {}
     characterImages["stanceRightMain"] = stanceRightMain
@@ -58,6 +59,16 @@ def main():
     characterImages["swingRightFinish"] = swingRightFinish
     characterImages["swingRightFinal"] = swingRightFinal
 
+    #Monster stuff
+    monsterImages = {}
+    monsterImages["slime"] = slime_surf
+    
+
+    #Music
+    muzic = pygame.mixer.Sound('mainMusic.mp3')
+
+    slimes = []
+
     # init default gameState
     
     # each player gets own key 
@@ -67,6 +78,8 @@ def main():
     gameState["character"] = "stanceRightMain"
     gameState["characterStats"] = {"hp": 100, "gold": 0, "xp": 0, "lvl": 0, "XY": (charX_pos, charY_pos)}
     gameState["status"] = "INIT"
+    gameState["round"] = 0
+    gameState["monsters"] = {}
 
     
 
@@ -74,238 +87,259 @@ def main():
     # establish server connection
     clientSock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     clientSock.settimeout(5)
-    host = platform.node()
-   
-    print(f"Successfully connected to {host} at port {str(port)}")
-
-    try:
-        clientSock.connect((host, port))
-    except:
-        print("Error connecting to server")
-
-    msg = json.dumps(gameState)
-    
-    try:
-        
-        #print(f"about to send {msg}")
-        print(f"with length {msgLength(msg)}")
-        length = msgLength(msg)
-        clientSock.sendall(length.encode("utf-8"))
-        
-        clientSock.sendall(msg.encode("utf-8"))
-        
-
-    except:
-        print("Failed to send initialized state to server")
-        sys.exit()
-
-    try:
-        length = clientSock.recv(8)
-        
-        length = int(length.decode())
-
-        msg = clientSock.recv(length)
-        
-        msg = msg.decode()
-
-    except:
-        print("Error receiving update from server 1")
-        sys.exit()
-
-    msg = json.loads(msg)
-
-    threadSock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    threadSock.settimeout(5)
-    host = msg["host"]
-    port = msg["port"]
-    try:
-        print(f"host is {host}, {port}")
-        threadSock.connect((msg["host"], int(msg["port"])))
-        print("Connected to thread")
-    except:
-        print("Error conncting to server Thread")
-        return False
-    msg = "INIT"
-    length = msgLength(msg)
-    try:
-        threadSock.sendall(length.encode("utf-8"))
-        threadSock.sendall(msg.encode("utf-8"))
-    except:
-        print("Error sending init to thread")
-        return False
-    
-    try:
-        length = threadSock.recv(8)
-        length = int(length.decode())
-        msg = threadSock.recv(length)
-    except:
-        print("Error receiving start msg from thread server")
-        return False
-    msg = msg.decode()
-    if msg == "START":
-        print("lets play!")
-    else:
-        print("msg not start")
-        print(msg)
-        sys.exit()
-   
-    #screen.blit(backgrounds[gameState["background"]], (0,0))
-    #screen.blit(characterImages[gameState["character"]], (500,350))
     
     while True:
 
-
-        ######################################
-        #Receive user input
-
-        update = {}
-        update["playerKey"] = gameState["playerKey"]
-        update["status"] = "INPUT"
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                clientSock.close()
-                pygame.quit()
-                sys.exit()
-            if event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_SPACE:
-                    #swing = True
-                    #eSwing = 0
-                    update["type"] = "swing"
-                elif event.key == pygame.K_w:
-                    #charY_pos -= 5
-                    update["type"] = "moveUp"
-                elif event.key == pygame.K_a:
-                    #charX_pos -= 5
-                    update["type"] = "moveLeft"
-                
-                elif event.key == pygame.K_s:
-                    #charY_pos += 5
-                    update["type"] = "moveDown"
-                elif event.key == pygame.K_d:
-                    #charX_pos += 5
-                    update["type"] = "moveRight"
-
-
-        ####################################
-
-
-            
-        ####################################
-        #Send update to server
-        
-        if len(update.keys()) == 2:
-            update["status"] = "CHECK"
-            msg = json.dumps(update)
-            length = msgLength(msg)
-            try:
-                print("sending check")
-                threadSock.sendall(length.encode())
-
-                threadSock.sendall(msg.encode())
-
-            except:
-                print("Failed to send CHECK to state to server")
-                
-
-        else:
-            msg = json.dumps(update)
-            length = msgLength(msg)
-            try:
-                threadSock.sendall(length.encode())
-
-                threadSock.sendall(msg.encode())
-
-            except:
-                print("Failed to send updated state to server")
-            
-
-        ###################################
-
-
-        ###################################
-        #Receive new Game State from server
-
         try:
-            length = threadSock.recv(8)
-
-            length = int(length.decode())
-            
-            update = threadSock.recv(length)
-            
-            update = update.decode()
-            
-            serverUpdate = json.loads(update)
-
-
-        except OSError:
-            print("Error receiving update from server 2")
+            clientSock.connect((host, port))
+        except:
+            print("Error connecting to server")
             continue
 
+        print(f"Successfully connected to {host} at port {str(port)}")
 
-        ###################################  
-       
+        #msg = json.dumps(gameState)
+        msg = defaultdict(dict)
+        msg["dimensions"]["slime"] = (slime_width, slime_height)
+        msg["playerKey"] = gameState["playerKey"]
+        msg = json.dumps(msg)
+        try:
+            
+            #print(f"about to send {msg}")
+            print(f"with length {msgLength(msg)}")
+            length = msgLength(msg)
+            clientSock.sendall(length.encode("utf-8"))
+            
+            clientSock.sendall(msg.encode("utf-8"))
+            
 
-        ##############################
-        #update client gamestate
+        except:
+            print("Failed to send initialized state to server")
+            continue
 
-        for key in serverUpdate.keys():
+        try:
+            length = clientSock.recv(8)
+            
+            length = int(length.decode())
 
-            """
-            if key == "character":
+            msg = clientSock.recv(length)
+            
+            msg = msg.decode()
+
+        except:
+            print("Error receiving update from server 1")
+            continue
+
+        msg = json.loads(msg)
+
+        threadSock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        threadSock.settimeout(5)
+        host = msg["host"]
+        port = msg["port"]
+        try:
+            print(f"host is {host}, {port}")
+            threadSock.connect((msg["host"], int(msg["port"])))
+            print("Connected to thread")
+        except:
+            print("Error conncting to server Thread")
+            continue
+        msg = "INIT"
+        length = msgLength(msg)
+        try:
+            threadSock.sendall(length.encode("utf-8"))
+            threadSock.sendall(msg.encode("utf-8"))
+        except:
+            print("Error sending init to thread")
+            continue
+        
+        try:
+            length = threadSock.recv(8)
+            length = int(length.decode())
+            msg = threadSock.recv(length)
+        except:
+            print("Error receiving start msg from thread server")
+            continue
+        
+        msg = msg.decode()
+        if msg == "START":
+            print("lets play!")
+        else:
+            print("msg not start")
+            print(msg)
+            continue
+    
+        #screen.blit(backgrounds[gameState["background"]], (0,0))
+        #screen.blit(characterImages[gameState["character"]], (500,350))
+        
+        muzic.play()
+        while True:
+
+
+            ######################################
+            #Receive user input
+
+            update = {}
+            update["playerKey"] = gameState["playerKey"]
+            update["status"] = "INPUT"
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    clientSock.close()
+                    pygame.quit()
+                    sys.exit()
+                if event.type == pygame.KEYDOWN:
+                    if event.key == pygame.K_SPACE:
+                        #swing = True
+                        #eSwing = 0
+                        update["type"] = "swing"
+                    elif event.key == pygame.K_w:
+                        #charY_pos -= 5
+                        update["type"] = "moveUp"
+                    elif event.key == pygame.K_a:
+                        #charX_pos -= 5
+                        update["type"] = "moveLeft"
+                    
+                    elif event.key == pygame.K_s:
+                        #charY_pos += 5
+                        update["type"] = "moveDown"
+                    elif event.key == pygame.K_d:
+                        #charX_pos += 5
+                        update["type"] = "moveRight"
+
+
+            ####################################
+
+
                 
-                print("inkey")
-                if serverUpdate["character"] == "stanceRightMain":
-                    print("correct char")
-                    gameState["character"] = stanceRightMain
-                elif serverUpdate["character"] == "stanceLeftMain":
-                    gameState["character"] = stanceLeftMain
-                elif serverUpdate["character"] == "swingRightStart":
-                    gameState["character"] = swingRightStart
-                elif serverUpdate["character"] == "swingRightMid":
-                    gameState["character"] = swingRightMid
-                elif serverUpdate["character"] == "swingRightUp":
-                    gameState["character"] = swingRightUp
-                elif serverUpdate["character"] == "swingRightFinish":
-                    gameState["character"] = swingRightFinish
-                elif serverUpdate["character"] == "swingRightFinal":
-                    gameState["character"] = swingRightFinal
-                else:
-                    gameState["character"] = stanceRightMain
-            """
-            if key == "character":
-                gameState["character"] = serverUpdate["character"]
-            elif key == "characterStats":
-                for attribute in serverUpdate[key].keys():
-                    if attribute == "hp":
-                        gameState["characterStats"]["hp"] = serverUpdate[key]["hp"]
-                    elif attribute == "gold":
-                        gameState["characterStats"]["gold"] = serverUpdate[key]["gold"]
-                    elif attribute == "xp":
-                        gameState["characterStats"]["xp"] = serverUpdate[key]["xp"]
-                    elif attribute == "lvl":
-                        gameState["characterStats"]["lvl"] = serverUpdate[key]["lvl"]
-                    elif attribute == "XY":
-                        gameState["characterStats"]["XY"] = serverUpdate[key]["XY"]
+            ####################################
+            #Send update to server
+            
+            if len(update.keys()) == 2:
+                update["status"] = "CHECK"
+                update["clock"] = time.time_ns()
+                msg = json.dumps(update)
+                length = msgLength(msg)
+                try:
+                    print("sending check")
+                    threadSock.sendall(length.encode())
+
+                    threadSock.sendall(msg.encode())
+
+                except:
+                    print("Failed to send CHECK to state to server")
+                    
+
             else:
-                print("No updates!")
-            
-        ###################################
+                msg = json.dumps(update)
+                length = msgLength(msg)
+                try:
+                    threadSock.sendall(length.encode())
+
+                    threadSock.sendall(msg.encode())
+
+                except:
+                    print("Failed to send updated state to server")
+                
+
+            ###################################
 
 
-        ###################################
-        #Display New Game State
+            ###################################
+            #Receive new Game State from server
 
-        #Background
-        if gameState["background"] == "background_surf":
-            
-            screen.blit(background_surf,(0,0))
+            try:
+                length = threadSock.recv(8)
 
-        #Character Image
+                length = int(length.decode())
+                
+                update = threadSock.recv(length)
+                
+                update = update.decode()
+                
+                serverUpdate = json.loads(update)
+
+
+            except OSError:
+                print("Error receiving update from server 2")
+                continue
+
+
+            ###################################  
         
-        screen.blit(characterImages[gameState["character"]],gameState["characterStats"]["XY"])
-        
-        pygame.display.update()
-        clock.tick(60)
+
+            ##############################
+            #update client gamestate
+
+            for key in serverUpdate.keys():
+
+                """
+                if key == "character":
+                    
+                    print("inkey")
+                    if serverUpdate["character"] == "stanceRightMain":
+                        print("correct char")
+                        gameState["character"] = stanceRightMain
+                    elif serverUpdate["character"] == "stanceLeftMain":
+                        gameState["character"] = stanceLeftMain
+                    elif serverUpdate["character"] == "swingRightStart":
+                        gameState["character"] = swingRightStart
+                    elif serverUpdate["character"] == "swingRightMid":
+                        gameState["character"] = swingRightMid
+                    elif serverUpdate["character"] == "swingRightUp":
+                        gameState["character"] = swingRightUp
+                    elif serverUpdate["character"] == "swingRightFinish":
+                        gameState["character"] = swingRightFinish
+                    elif serverUpdate["character"] == "swingRightFinal":
+                        gameState["character"] = swingRightFinal
+                    else:
+                        gameState["character"] = stanceRightMain
+                """
+                if key == "character":
+                    gameState["character"] = serverUpdate["character"]
+                elif key == "characterStats":
+                    for attribute in serverUpdate[key].keys():
+                        if attribute == "hp":
+                            gameState["characterStats"]["hp"] = serverUpdate[key]["hp"]
+                        elif attribute == "gold":
+                            gameState["characterStats"]["gold"] = serverUpdate[key]["gold"]
+                        elif attribute == "xp":
+                            gameState["characterStats"]["xp"] = serverUpdate[key]["xp"]
+                        elif attribute == "lvl":
+                            gameState["characterStats"]["lvl"] = serverUpdate[key]["lvl"]
+                        elif attribute == "XY":
+                            gameState["characterStats"]["XY"] = serverUpdate[key]["XY"]
+                elif key == "monsters":
+                    for monster in serverUpdate[key].keys():
+                        if monster == "slimes":
+                            gameState["monsters"]["slimes"] = serverUpdate["monsters"]["slimes"]
+
+                else:
+                    print("No updates!")
+                
+            ###################################
+
+
+            ###################################
+            #Display New Game State
+
+            #Background
+            if gameState["background"] == "background_surf":
+                
+                screen.blit(background_surf,(0,0))
+
+            #Character Image
+            
+            screen.blit(characterImages[gameState["character"]],gameState["characterStats"]["XY"])
+
+            #Monsters
+
+            for monster in gameState["monsters"].keys():
+                if monster == "slimes":
+                    for slime in gameState["monsters"]["slimes"]:
+                        screen.blit(slime_surf, (slime[0], slime[1]))
+
+            
+            pygame.display.update()
+            clock.tick(60)
 
 
 
