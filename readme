@@ -1,0 +1,5 @@
+slimes:
+(xpos, ypos, health)
+
+character:
+(imageStr, timestartState)
