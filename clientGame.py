@@ -6,13 +6,16 @@ import json
 import random
 from collections import defaultdict
 
-def display_hp_exp(screen, hp, exp):
+def display_hp_exp(screen, hp, exp, lvl):
     font = pygame.font.Font(None, 32)
     hp_text = font.render(f"HP: {hp}", True, (255, 255, 255))
     exp_text = font.render(f"EXP: {exp}", True, (255, 255, 255))
+    level_text = font.render(f"LEVEL: {lvl}", True,(255,255,255))
     
     screen.blit(hp_text, (10, 10))
     screen.blit(exp_text, (250, 10))
+    screen.blit(level_text, (500, 10))
+
 
 def main():
     print("in main")
@@ -51,6 +54,7 @@ def main():
     background_surf = pygame.image.load('startBackground.jpeg')
     slime_surf = pygame.image.load('slime.png')
     slime_width, slime_height = slime_surf.get_size()
+    char_invuln = False
     
     charX_pos = 100
     charY_pos = 100
@@ -244,6 +248,22 @@ def main():
                     elif event.key == pygame.K_d:
                         
                         update["type"] = "moveRight"
+                elif event.type == pygame.KEYUP:
+                    
+                    if event.key == pygame.K_w:
+                        
+                        update["type"] = "stopUp"
+                    elif event.key == pygame.K_a:
+                        
+                        update["type"] = "stopLeft"
+                    
+                    elif event.key == pygame.K_s:
+                        
+                        update["type"] = "stopDown"
+                    elif event.key == pygame.K_d:
+                        
+                        update["type"] = "stopRight"
+                    
                 
 
 
@@ -428,7 +448,7 @@ def main():
                         screen.blit(slime_surf, (slime[0], slime[1]))
             operations += 1
 
-            display_hp_exp(screen, gameState["characterStats"]["hp"], gameState["characterStats"]["xp"])
+            display_hp_exp(screen, gameState["characterStats"]["hp"], gameState["characterStats"]["xp"], gameState["characterStats"]["lvl"])
 
             pygame.display.update()
             clock.tick(60)
