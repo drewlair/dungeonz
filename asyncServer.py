@@ -13,15 +13,19 @@ from threading import Lock
 
 
 
-MOVESPEED = 30
+#MOVESPEED = 30
+
+MOVESPEED = 3
 ATTACK_DAMAGE = 50
+dx = 0
+dy = 0
 gameClock = -1
 clientClock = {}
 swingTime = 0.5
 hurtTime = 0.3
 globalGame = {}
 MAX_THREADS = 4
-SLIME_SPEED = 3
+SLIME_SPEED = 2
 wave_slimes = {1: 3, 2: 5, 3: 8, 4: 12, 5: 15}
 SCREEN_WIDTH = 1000
 SCREEN_HEIGHT = 700
@@ -217,11 +221,6 @@ def playerHandler(sock, host, port, lock, playerKey):
                 msg = json.loads(msg.decode())
                 localGame = gameStateUpdate(msg, conn, playerClock, lock)
 
-    
-
-
-
-    pass
 def gameInit(connection, playerKey):
 
     global globalGame
@@ -345,6 +344,8 @@ def gameStateUpdate(updates, connection, clock, lock):
     updateRes = defaultdict(dict)
     global globalGame
     global SLIME_SPEED
+    global dx
+    global dy
     
     clientKey = updates["playerKey"]
     tempGlobal = {}
@@ -375,45 +376,63 @@ def gameStateUpdate(updates, connection, clock, lock):
             elif tempGlobal[clientKey]["isHurt"]:
                 temp = tempGlobal[clientKey]["character"]
                 hurt = updateHurt(tempGlobal[clientKey]["character"][1])
+                
                 if not hurt:
                     tempGlobal[clientKey]["character"] = "stanceRightMain"
                     tempGlobal[clientKey]["isHurt"] = False
                     updateRes["character"] = "stanceRightMain"
                     updateRes["isHurt"] = False
-               
+            
+            if dx != 0 or dy != 0:
+                xy = tempGlobal[clientKey]["characterStats"]["XY"]
+                tempGlobal[clientKey]["characterStats"]["XY"] = (xy[0] + dx, (xy[1] +  dy))
+                updateRes["characterStats"]["XY"] = (xy[0] + dx, (xy[1] + dy))
+                
+          
             
             #TODO  add part for "isHurt"
         
+       
+        
         elif updates["status"] == "INPUT":
             
+         
             for key in updates.keys():
-
+            
                 if key == "type":
-
-                    if updates[key] == "moveUp":
-                        
+                    
+                    if updates[key] == "stopUp" or updates[key] == "stopDown":
+                        print("in up")
+                        dy = 0
+                    elif updates[key] == "stopRight" or updates[key] == "stopLeft":
+                        dx = 0
+                    
+                    elif updates[key] == "moveUp":
+                        dy = -1 * MOVESPEED
                         xy = tempGlobal[clientKey]["characterStats"]["XY"]
-                        tempGlobal[clientKey]["characterStats"]["XY"] = (xy[0], (xy[1] -  MOVESPEED))
-                        updateRes["characterStats"]["XY"] = (xy[0], (xy[1] -  MOVESPEED))
+                        tempGlobal[clientKey]["characterStats"]["XY"] = (xy[0], (xy[1] +  dy))
+                        updateRes["characterStats"]["XY"] = (xy[0], (xy[1] +  dy))
                         
 
                     elif updates[key] == "moveRight":
-                        
+                        dx = MOVESPEED
                         xy = tempGlobal[clientKey]["characterStats"]["XY"]
-                        tempGlobal[clientKey]["characterStats"]["XY"] = ((xy[0] + MOVESPEED), xy[1])
-                        updateRes["characterStats"]["XY"] = ((xy[0] + MOVESPEED), xy[1])
+                        tempGlobal[clientKey]["characterStats"]["XY"] = ((xy[0] + dx), xy[1])
+                        updateRes["characterStats"]["XY"] = ((xy[0] + dx), xy[1])
                         
 
                     elif updates[key] == "moveDown":
+                        dy = MOVESPEED
                         xy = tempGlobal[clientKey]["characterStats"]["XY"]
-                        tempGlobal[clientKey]["characterStats"]["XY"] = (xy[0], (xy[1] +  MOVESPEED))
-                        updateRes["characterStats"]["XY"] = (xy[0], (xy[1] +  MOVESPEED))
+                        tempGlobal[clientKey]["characterStats"]["XY"] = (xy[0], (xy[1] +  dy))
+                        updateRes["characterStats"]["XY"] = (xy[0], (xy[1] +  dy))
                         
 
                     elif updates[key] == "moveLeft":
+                        dx = -1 * MOVESPEED
                         xy = tempGlobal[clientKey]["characterStats"]["XY"]
-                        tempGlobal[clientKey]["characterStats"]["XY"] = ((xy[0] - MOVESPEED), xy[1])
-                        updateRes["characterStats"]["XY"] = ((xy[0] - MOVESPEED), xy[1])
+                        tempGlobal[clientKey]["characterStats"]["XY"] = ((xy[0] + dx), xy[1])
+                        updateRes["characterStats"]["XY"] = ((xy[0] + dx), xy[1])
 
                         
                     elif updates[key] == "swing":
@@ -445,6 +464,7 @@ def gameStateUpdate(updates, connection, clock, lock):
                         updateRes["character"] = "hurtRight"
                         updateRes["characterStats"]["hp"] = tempGlobal[clientKey]["characterStats"]["hp"]
                         updateRes["isHurt"] = True
+                        
 
                     elif enemies == "bats" and not globalGame[clientKey]["isHurt"] and not tempGlobal[clientKey]["isSwinging"]:
   
@@ -468,6 +488,14 @@ def gameStateUpdate(updates, connection, clock, lock):
                                 if (stats[2] - ATTACK_DAMAGE) <= 0:
                                     #tempGlobal["monsters"]["slimes"].remove(index)
                                     aliveSlimes[index] = None
+                                    
+                                       
+                                    tempGlobal[clientKey]["characterStats"]["xp"] += 10
+                                    updateRes["characterStats"]["xp"] = tempGlobal[clientKey]["characterStats"]["xp"] 
+                                    if tempGlobal[clientKey]["characterStats"]["xp"] >= 100:
+                                       tempGlobal[clientKey]["characterStats"]["lvl"] += 1
+                                       updateRes["characterStats"]["lvl"] = tempGlobal[clientKey]["characterStats"]["lvl"] 
+                                       tempGlobal[clientKey]["characterStats"]["xp"] -= 100 
                                     print("killed slime")
                                     print(aliveSlimes)
                                 else:
@@ -490,6 +518,12 @@ def gameStateUpdate(updates, connection, clock, lock):
                             movableSlimes.remove(index)
                         elif mon == "bats":
                             movableBats.remove(index)
+                
+            if dx != 0 or dy != 0:
+                xy = tempGlobal[clientKey]["characterStats"]["XY"]
+                tempGlobal[clientKey]["characterStats"]["XY"] = (xy[0] + dx, (xy[1] +  dy))
+                updateRes["characterStats"]["XY"] = (xy[0] + dx, (xy[1] + dy))
+                
                     
                         
 
@@ -779,4 +813,3 @@ def msgLength(msg):
 
 if __name__ == "__main__":
     main()
-    
