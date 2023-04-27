@@ -39,6 +39,7 @@ def main():
     swingRightUp = pygame.image.load('swingRightUp.png')
     swingRightFinish = pygame.image.load('swingRightFinish.png')
     swingRightFinal = pygame.image.load('swingRightFinal.png')
+    hurtRight = pygame.image.load('guts_hurt.png')
     background_surf = pygame.image.load('startBackground.jpeg')
     slime_surf = pygame.image.load('slime.png')
     slime_width, slime_height = slime_surf.get_size()
@@ -58,10 +59,12 @@ def main():
     characterImages["swingRightUp"] = swingRightUp
     characterImages["swingRightFinish"] = swingRightFinish
     characterImages["swingRightFinal"] = swingRightFinal
+    characterImages["hurtRight"] = hurtRight
 
     #Monster stuff
     monsterImages = {}
     monsterImages["slime"] = slime_surf
+    operations = 0
     
 
     #Music
@@ -80,6 +83,8 @@ def main():
     gameState["status"] = "INIT"
     gameState["round"] = 0
     gameState["monsters"] = {}
+    gameState["isSwinging"] = False
+    gameState["isHurt"] = False
 
     
 
@@ -92,8 +97,10 @@ def main():
 
         try:
             clientSock.connect((host, port))
-        except:
+        except Exception as e:
+            print(e)
             print("Error connecting to server")
+            sys.exit()
             continue
 
         print(f"Successfully connected to {host} at port {str(port)}")
@@ -111,12 +118,12 @@ def main():
             clientSock.sendall(length.encode("utf-8"))
             
             clientSock.sendall(msg.encode("utf-8"))
-            
+            print("success init send")
 
         except:
             print("Failed to send initialized state to server")
             continue
-
+        
         try:
             length = clientSock.recv(8)
             
@@ -126,7 +133,8 @@ def main():
             
             msg = msg.decode()
 
-        except:
+        except Exception as e:
+            print(e)
             print("Error receiving update from server 1")
             continue
 
@@ -172,38 +180,121 @@ def main():
         #screen.blit(characterImages[gameState["character"]], (500,350))
         
         muzic.play()
+        failStreak = 0
+        dx = 0
+        dy = 0
+        startTime = time.time_ns()
         while True:
 
 
             ######################################
             #Receive user input
 
+            if failStreak > 30:
+                while True:
+                    try:
+                        msg = {}
+                        msg["status"] = "DEADCONN"
+                        msg["playerKey"] = gameState["playerKey"]
+                        msg = json.dumps(msg)
+                        length = msgLength(msg)
+                        clientSock.sendall(length.encode("utf-8"))
+                        clientSock.sendall(msg.encode("utf-8"))
+                        break
+                    except:
+                        print("Error sending deadthread msg to server")
+
+                break
+
             update = {}
             update["playerKey"] = gameState["playerKey"]
             update["status"] = "INPUT"
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
+                    endtime = time.time_ns()
+                    throughput = (operations / ((endtime - startTime)/10**9))
+                    print(f"system throughput was {throughput} ops/ sec")
+                    latency = ((endtime - startTime) / operations) / 10**9
+                    print(f"system latency was {latency} sec / ops")
                     clientSock.close()
                     pygame.quit()
                     sys.exit()
                 if event.type == pygame.KEYDOWN:
                     if event.key == pygame.K_SPACE:
-                        #swing = True
-                        #eSwing = 0
+                        
                         update["type"] = "swing"
                     elif event.key == pygame.K_w:
-                        #charY_pos -= 5
+                        
                         update["type"] = "moveUp"
                     elif event.key == pygame.K_a:
-                        #charX_pos -= 5
+                        
                         update["type"] = "moveLeft"
                     
                     elif event.key == pygame.K_s:
-                        #charY_pos += 5
+                        
                         update["type"] = "moveDown"
                     elif event.key == pygame.K_d:
-                        #charX_pos += 5
+                        
                         update["type"] = "moveRight"
+                
+
+
+            ####################################
+            #Get collisions
+         
+            char_rect = characterImages[gameState["character"]].get_rect(topleft=gameState["characterStats"]["XY"])
+            bats_attck = False
+            enemies = None
+            monI = []
+            for monster in gameState["monsters"]:
+                if monster == "slimes":
+                    for slimeI, slime in enumerate(gameState["monsters"]["slimes"]):
+                        monst_rect = slime_surf.get_rect(topleft=(slime[0], slime[1]))
+                        if monst_rect.colliderect(char_rect):
+                            
+                            if not gameState["isHurt"] and not gameState["isSwinging"]:
+                                enemies = "slimes"
+                                
+                            elif gameState["isSwinging"]:
+                                monI.append(("slimes", slimeI))
+
+                            if "collisions" in update.keys():
+                                
+                                update["collisions"].append(("slimes", slimeI))
+                            else:
+                                
+                                update["collisions"] = [("slimes", slimeI)]
+
+                                
+                elif monster == "bats":
+                    for batI, bat in enumerate(gameState["monsters"]["slimes"]):
+                        monst_rect = slime_surf.get_rect(topleft=(slime[0], slime[1]))
+                        if monst_rect.colliderect(char_rect):
+                            
+
+                            if not gameState["isSwinging"] and not gameState["isHurt"]:
+                                enemies = "bats"
+                            
+                            elif gameState["isSwinging"]:
+                                monI.append(("slimes", slimeI))
+
+                            if "collisions" in update.keys():
+                                update["collisions"].append(("bats", batI))
+                            else:
+                                update["collisions"] = [("bats", batI)]
+            
+            if not enemies and len(monI) > 0:
+                update["attack"] = monI
+            elif enemies == "slimes" or enemies == "bats":
+                
+                update["attack"] = enemies
+            
+
+            
+            
+
+
+
 
 
             ####################################
@@ -219,13 +310,15 @@ def main():
                 msg = json.dumps(update)
                 length = msgLength(msg)
                 try:
-                    print("sending check")
+                   
                     threadSock.sendall(length.encode())
 
                     threadSock.sendall(msg.encode())
 
                 except:
                     print("Failed to send CHECK to state to server")
+                    failStreak += 1
+                    continue
                     
 
             else:
@@ -238,6 +331,10 @@ def main():
 
                 except:
                     print("Failed to send updated state to server")
+                    failStreak += 1
+                    continue
+
+            failStreak = 0
                 
 
             ###################################
@@ -248,16 +345,16 @@ def main():
 
             try:
                 length = threadSock.recv(8)
-
+               
                 length = int(length.decode())
-                
+               
                 update = threadSock.recv(length)
-                
+               
                 update = update.decode()
-                
+             
                 serverUpdate = json.loads(update)
 
-
+                
             except OSError:
                 print("Error receiving update from server 2")
                 continue
@@ -271,28 +368,6 @@ def main():
 
             for key in serverUpdate.keys():
 
-                """
-                if key == "character":
-                    
-                    print("inkey")
-                    if serverUpdate["character"] == "stanceRightMain":
-                        print("correct char")
-                        gameState["character"] = stanceRightMain
-                    elif serverUpdate["character"] == "stanceLeftMain":
-                        gameState["character"] = stanceLeftMain
-                    elif serverUpdate["character"] == "swingRightStart":
-                        gameState["character"] = swingRightStart
-                    elif serverUpdate["character"] == "swingRightMid":
-                        gameState["character"] = swingRightMid
-                    elif serverUpdate["character"] == "swingRightUp":
-                        gameState["character"] = swingRightUp
-                    elif serverUpdate["character"] == "swingRightFinish":
-                        gameState["character"] = swingRightFinish
-                    elif serverUpdate["character"] == "swingRightFinal":
-                        gameState["character"] = swingRightFinal
-                    else:
-                        gameState["character"] = stanceRightMain
-                """
                 if key == "character":
                     gameState["character"] = serverUpdate["character"]
                 elif key == "characterStats":
@@ -307,10 +382,17 @@ def main():
                             gameState["characterStats"]["lvl"] = serverUpdate[key]["lvl"]
                         elif attribute == "XY":
                             gameState["characterStats"]["XY"] = serverUpdate[key]["XY"]
+
                 elif key == "monsters":
                     for monster in serverUpdate[key].keys():
                         if monster == "slimes":
                             gameState["monsters"]["slimes"] = serverUpdate["monsters"]["slimes"]
+
+                elif key == "isSwinging":
+                    gameState["isSwinging"] = serverUpdate["isSwinging"]
+
+                elif key == "isHurt":
+                    gameState["isHurt"] = serverUpdate["isHurt"]
 
                 else:
                     print("No updates!")
@@ -336,6 +418,7 @@ def main():
                 if monster == "slimes":
                     for slime in gameState["monsters"]["slimes"]:
                         screen.blit(slime_surf, (slime[0], slime[1]))
+            operations += 1
 
             
             pygame.display.update()
