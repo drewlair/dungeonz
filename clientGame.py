@@ -6,6 +6,14 @@ import json
 import random
 from collections import defaultdict
 
+def display_hp_exp(screen, hp, exp):
+    font = pygame.font.Font(None, 32)
+    hp_text = font.render(f"HP: {hp}", True, (255, 255, 255))
+    exp_text = font.render(f"EXP: {exp}", True, (255, 255, 255))
+    
+    screen.blit(hp_text, (10, 10))
+    screen.blit(exp_text, (250, 10))
+
 def main():
     print("in main")
     try:
@@ -420,7 +428,8 @@ def main():
                         screen.blit(slime_surf, (slime[0], slime[1]))
             operations += 1
 
-            
+            display_hp_exp(screen, gameState["characterStats"]["hp"], gameState["characterStats"]["xp"])
+
             pygame.display.update()
             clock.tick(60)
 
