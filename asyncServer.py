@@ -17,8 +17,7 @@ from threading import Lock
 
 MOVESPEED = 3
 ATTACK_DAMAGE = 50
-dx = 0
-dy = 0
+
 gameClock = -1
 clientClock = {}
 swingTime = 0.5
@@ -42,11 +41,14 @@ serverPort = None
 
 threadLock = Lock()
 
-def playerHandler(sock, host, port, lock, playerKey):
+def playerHandler(sock, host, port, lock, playerKey, friends):
 
-    friends = []
+    threadFriends = friends
     exit = False
-
+    
+    
+    dx = 0
+    dy = 0
     ############################
     #Establishing server connection
 
@@ -60,7 +62,7 @@ def playerHandler(sock, host, port, lock, playerKey):
         return False
     
     msg = {}
-    msg["newThread"] = (host, port)
+    msg["newThread"] = [host, port]
     msg["playerKey"] = playerKey
     msg = json.dumps(msg)
     length = msgLength(msg)
@@ -135,7 +137,8 @@ def playerHandler(sock, host, port, lock, playerKey):
     localGame = {}
     sock.settimeout(1)
     timeoutStreak = 0
-    inputs = [sock, conn]
+    inputs = [sock, conn, serverSock]
+    addClient = (False, None)
 
     ############################
 
@@ -153,6 +156,7 @@ def playerHandler(sock, host, port, lock, playerKey):
         except TimeoutError:
             print("threadwaiting")
             exit = True
+            
 
         if exit:
             msg = "DEADCLIENT"
@@ -167,14 +171,15 @@ def playerHandler(sock, host, port, lock, playerKey):
 
         for s in readable:
             if s is sock:
+                print("in sock")
                 conn, addr = s.accept()
-                
-                if addr is not (socket.gethostname(), serverPort):
-                    s.close()
+                print(f"serverAddr is {str(addr)}")
+                if addr[0] is not socket.gethostname() and addr[1] is not serverPort:
+                    conn.close()
                     continue
 
                 try:
-                    length = s.recv(8)
+                    length = conn.recv(8)
                 except:
                     print("Error for thread receving msg length from server 1")
                     continue
@@ -183,19 +188,48 @@ def playerHandler(sock, host, port, lock, playerKey):
                     print("Error for thread receving msg length from server 2")
                     continue
                 try:
-                    msg = s.recv(int(length))
+                    msg = conn.recv(int(length))
                 except:
                     print("Error for thread receving msg from server")
                     continue
                 
                 msg = json.loads(msg)
                 if msg["status"] == "NEWCLIENT":
-                    friends.append(msg["playerKey"])
+                    print("got new CLIENT")
+                    threadFriends.append(msg["playerKey"])
+                    addClient = (True, msg["playerKey"])
 
                 elif msg["status"] == "DEADCLIENT":
-                    friends.remove(msg["playerKey"])
+                    print("got dead client")
+                    threadFriends.remove(msg["playerKey"])
+
+            elif s is serverSock:
+            
+                print("in serverSock")
+                try:
+                    length = serverSock.recv(8)
+                    print(1)
+                    length = int(length.decode())
+                    if length == '':
+                        print("error receiving data from server")
+                        continue
+                    msg = serverSock.recv(length)
+                except Exception as e:
+                    print(e)
+                    print("error receiving new client msg from server")
+                print(2)
+                msg = json.loads(msg.decode())
+
+                if msg["status"] == "NEWCLIENT":
+                    print("got new CLIENT")
+                    threadFriends.append(msg["playerKey"])
+                    addClient = (True, msg["playerKey"])
 
 
+
+
+
+                
             else:
                 try:
                     length = conn.recv(8)
@@ -203,7 +237,7 @@ def playerHandler(sock, host, port, lock, playerKey):
                     print("threadWaiting")
                     continue
                 if length.decode() == '':
-                    print("conn error")
+                    
                     timeoutStreak += 1
                     continue
                 length = int(length.decode("utf-8"))
@@ -212,16 +246,22 @@ def playerHandler(sock, host, port, lock, playerKey):
                 except TimeoutError:
                     print("Length received but not msg")
                     continue
+                
                 if msg.decode() == '':
-                    print("conn error")
+                    
                     timeoutStreak += 1
                     continue
                 timeoutStreak = 0
 
                 msg = json.loads(msg.decode())
-                localGame = gameStateUpdate(msg, conn, playerClock, lock)
+                if addClient[0]:
+                    print("in add client")
+                    print(addClient)
+                    dx, dy = gameStateUpdate(msg, conn, playerClock, lock, addClient[1], threadFriends, dx, dy)
+                    addClient = (False, None)
+                dx, dy = gameStateUpdate(msg, conn, playerClock, lock, None, threadFriends, dx, dy)
 
-def gameInit(connection, playerKey):
+def gameInit(connection, playerKey, friends):
 
     global globalGame
     global executor
@@ -233,15 +273,25 @@ def gameInit(connection, playerKey):
     globalGame[playerKey]["character"] = "stanceRightMain"
     globalGame[playerKey]["isSwinging"] = False
     globalGame[playerKey]["isHurt"] = False
-    globalGame["monsters"] = {"slimes": [], "bats": []}
-    globalGame["wave"] = 0
+    #globalGame[playerKey]["isCooldown"] = False
+    print("here")
+    print(friends)
+    if len(friends) == 0:
+        print("correct!")
+        globalGame["isWin"] = False
+        globalGame["monsters"] = {"slimes": [], "bats": []}
+        globalGame["wave"] = 0
     clientClock[playerKey] = time.time_ns()
+
+    
+
 
     threadSock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     threadSock.settimeout(10)
     threadHost = platform.node()
     threadPort = 0
     Found = True
+
     while Found:
         for port in range(80,11000,1):
             try:
@@ -253,6 +303,7 @@ def gameInit(connection, playerKey):
                 break
             except OSError:
                 continue
+
     threadSock.listen(1)
     msg = {"host": threadHost, "port": threadPort}
     print(f"sending {threadHost} and {threadPort}")
@@ -271,11 +322,10 @@ def gameInit(connection, playerKey):
     
 
     global threadLock
-    args = [threadSock, threadHost, threadPort, threadLock, playerKey]
+    args = [threadSock, threadHost, threadPort, threadLock, playerKey, friends]
     future = executor.submit(playerHandler, *args)
 
-    global threadData
-    threadData[playerKey] = (threadHost, threadPort)
+    
 
     
 
@@ -338,14 +388,14 @@ def updateHurt(startTime):
     
 
 
-def gameStateUpdate(updates, connection, clock, lock):
+def gameStateUpdate(updates, connection, clock, lock, newClientKey, friends, dx, dy):
 
     
     updateRes = defaultdict(dict)
     global globalGame
     global SLIME_SPEED
-    global dx
-    global dy
+    
+    
     
     clientKey = updates["playerKey"]
     tempGlobal = {}
@@ -357,6 +407,11 @@ def gameStateUpdate(updates, connection, clock, lock):
         movableBats = [x for x in range(len(tempGlobal["monsters"]["bats"]))]
         aliveSlimes = tempGlobal["monsters"]["slimes"]
         aliveBats = tempGlobal["monsters"]["bats"]
+
+        if newClientKey:
+            print("LETS GO")
+            updateRes["newClient"] = newClientKey
+
         
         if updates["status"] == "CHECK":
             
@@ -385,12 +440,15 @@ def gameStateUpdate(updates, connection, clock, lock):
             
             if dx != 0 or dy != 0:
                 xy = tempGlobal[clientKey]["characterStats"]["XY"]
-                tempGlobal[clientKey]["characterStats"]["XY"] = (xy[0] + dx, (xy[1] +  dy))
-                updateRes["characterStats"]["XY"] = (xy[0] + dx, (xy[1] + dy))
+                newY = min(660,max(0,xy[1]+dy))
+                newX = min(950,max(0,xy[0]+dx))
+                tempGlobal[clientKey]["characterStats"]["XY"] = (newX,newY)
+                updateRes["characterStats"]["XY"] = (newX, newY)
+
                 
           
             
-            #TODO  add part for "isHurt"
+        
         
        
         
@@ -402,16 +460,17 @@ def gameStateUpdate(updates, connection, clock, lock):
                 if key == "type":
                     
                     if updates[key] == "stopUp" or updates[key] == "stopDown":
-                        print("in up")
                         dy = 0
+
                     elif updates[key] == "stopRight" or updates[key] == "stopLeft":
                         dx = 0
                     
                     elif updates[key] == "moveUp":
                         dy = -1 * MOVESPEED
                         xy = tempGlobal[clientKey]["characterStats"]["XY"]
-                        tempGlobal[clientKey]["characterStats"]["XY"] = (xy[0], (xy[1] +  dy))
-                        updateRes["characterStats"]["XY"] = (xy[0], (xy[1] +  dy))
+                        newY = min(650,max(0,xy[1]+dy))
+                        tempGlobal[clientKey]["characterStats"]["XY"] = (xy[0], newY)
+                        updateRes["characterStats"]["XY"] = (xy[0], newY)
                         
 
                     elif updates[key] == "moveRight":
@@ -424,15 +483,17 @@ def gameStateUpdate(updates, connection, clock, lock):
                     elif updates[key] == "moveDown":
                         dy = MOVESPEED
                         xy = tempGlobal[clientKey]["characterStats"]["XY"]
-                        tempGlobal[clientKey]["characterStats"]["XY"] = (xy[0], (xy[1] +  dy))
-                        updateRes["characterStats"]["XY"] = (xy[0], (xy[1] +  dy))
+                        newY = min(650,max(0,xy[1]+dy))
+                        tempGlobal[clientKey]["characterStats"]["XY"] = (xy[0], newY)
+                        updateRes["characterStats"]["XY"] = (xy[0], newY)
                         
 
                     elif updates[key] == "moveLeft":
                         dx = -1 * MOVESPEED
                         xy = tempGlobal[clientKey]["characterStats"]["XY"]
-                        tempGlobal[clientKey]["characterStats"]["XY"] = ((xy[0] + dx), xy[1])
-                        updateRes["characterStats"]["XY"] = ((xy[0] + dx), xy[1])
+                        newX = min(950,max(0,xy[0]+dx))
+                        tempGlobal[clientKey]["characterStats"]["XY"] = (newX, xy[1])
+                        updateRes["characterStats"]["XY"] = (newX, xy[1])
 
                         
                     elif updates[key] == "swing":
@@ -466,7 +527,7 @@ def gameStateUpdate(updates, connection, clock, lock):
                         updateRes["isHurt"] = True
                         
 
-                    elif enemies == "bats" and not globalGame[clientKey]["isHurt"] and not tempGlobal[clientKey]["isSwinging"]:
+                    elif enemies == "bats" and not tempGlobal[clientKey]["isHurt"] and not tempGlobal[clientKey]["isSwinging"]:
   
                         tempGlobal[clientKey]["characterStats"]["hp"] -= BAT_DAMAGE
                         tempGlobal[clientKey]["character"] = ( "hurtRight", time.time_ns() ) 
@@ -475,18 +536,24 @@ def gameStateUpdate(updates, connection, clock, lock):
                         updateRes["characterStats"]["hp"] = tempGlobal[clientKey]["characterStats"]["hp"]
                         updateRes["isHurt"] = True
 
-                    elif not globalGame[clientKey]["isHurt"]:
+                    elif not tempGlobal[clientKey]["isHurt"]:
+                        if enemies == "slimes" or enemies == "bats":
+                            print("edge case")
+                            continue
 
                         for pair in enemies:
+                            
+                            
                             enemy = pair[0]
                             index = pair[1]
 
                             if enemy == "slimes":
-                       
+                                print("stats??")
                                 stats = tempGlobal["monsters"]["slimes"][index]
       
                                 if (stats[2] - ATTACK_DAMAGE) <= 0:
-                                    #tempGlobal["monsters"]["slimes"].remove(index)
+                                    
+                                    print("aliveslimes?")
                                     aliveSlimes[index] = None
                                     
                                        
@@ -496,16 +563,17 @@ def gameStateUpdate(updates, connection, clock, lock):
                                        tempGlobal[clientKey]["characterStats"]["lvl"] += 1
                                        updateRes["characterStats"]["lvl"] = tempGlobal[clientKey]["characterStats"]["lvl"] 
                                        tempGlobal[clientKey]["characterStats"]["xp"] -= 100 
-                                    print("killed slime")
-                                    print(aliveSlimes)
+                                    
                                 else:
                                     #tempGlobal["monsters"]["slimes"][index] = ( stats[0],stats[1], stats[2]-ATTACK_DAMAGE )
+                                    print("bad stats?")
                                     aliveSlimes[index] = ( stats[0],stats[1], stats[2]-ATTACK_DAMAGE )
 
                             if enemy == "bats":
+                                
                                 stats = tempGlobal["monsters"]["bats"][index]
                                 if (stats[2] - ATTACK_DAMAGE) <= 0:
-                                    #tempGlobal["monsters"]["bats"].remove(index)
+                                    
                                     aliveBats[index] = None
                                 else:
                                     aliveBats[index] = ( stats[0],stats[1], stats[2]-ATTACK_DAMAGE )
@@ -515,23 +583,34 @@ def gameStateUpdate(updates, connection, clock, lock):
                     for mon, index in updates[key]:
                         if mon == "slimes":
                             
+                            print("probable case")
                             movableSlimes.remove(index)
+                            
                         elif mon == "bats":
                             movableBats.remove(index)
                 
             if dx != 0 or dy != 0:
                 xy = tempGlobal[clientKey]["characterStats"]["XY"]
-                tempGlobal[clientKey]["characterStats"]["XY"] = (xy[0] + dx, (xy[1] +  dy))
-                updateRes["characterStats"]["XY"] = (xy[0] + dx, (xy[1] + dy))
+                newX = min(960,max(0,dx+xy[0]))
+                newY = min(670,max(0,xy[1]+dy))
+                tempGlobal[clientKey]["characterStats"]["XY"] = (newX, newY)
+                updateRes["characterStats"]["XY"] = (newX, newY)
                 
                     
-                        
+    
 
-        
+        for friend in friends:
+                if tempGlobal[friend]["isSwinging"] or tempGlobal[friend]["isHurt"]:
+                    updateRes[friend] = (globalGame[friend]["character"][0], globalGame[friend]["characterStats"]["XY"])
+                else:
+                    updateRes[friend] = (globalGame[friend]["character"], globalGame[friend]["characterStats"]["XY"])
+        if len(friends) > 0:
+            print("updateREscheck")
+            print(updateRes)
         charCoords = tempGlobal[clientKey]["characterStats"]["XY"]
         ###########
         for slimeI in movableSlimes:
-            print(slimeI)
+            
             if not aliveSlimes[slimeI]:
                 continue
             stats = aliveSlimes[slimeI]
@@ -574,24 +653,34 @@ def gameStateUpdate(updates, connection, clock, lock):
             updateRes["wave"] = 1
         
         elif len(tempGlobal["monsters"]["slimes"]) == 0 and len(tempGlobal["monsters"]["bats"]) == 0:
-            print("getting new round")
+            
             slimes = []
             wave = tempGlobal["wave"] + 1
-            for i in range(wave_slimes[wave]):
-                slimes.append((random.randint(0, SCREEN_WIDTH - SLIME_WIDTH), random.randint(0, SCREEN_HEIGHT - SLIME_HEIGHT), SLIME_HP))
-            tempGlobal["monsters"]["slimes"] = slimes
-            tempGlobal["wave"] = wave
-            updateRes["monsters"]["slimes"] = slimes
-            updateRes["wave"] = wave
+            
+            if wave == 6:
+                
+                tempGlobal["isWin"] = True
+                updateRes["isWin"] = True
+            else:
+                for i in range(wave_slimes[wave]):
+                    
+                    slimes.append((random.randint(0, SCREEN_WIDTH - SLIME_WIDTH), random.randint(0, SCREEN_HEIGHT - SLIME_HEIGHT), SLIME_HP))
+
+                tempGlobal["monsters"]["slimes"] = slimes
+                tempGlobal["wave"] = wave
+                updateRes["monsters"]["slimes"] = slimes
+                updateRes["wave"] = wave
 
 
-
+        dxReturn = dx
+        dyReturn = dy
         globalGame = tempGlobal.copy()
 
 
         
 
-    
+    if newClientKey:
+        print("about to send dollars")
     try:
         
         msg = json.dumps(updateRes)
@@ -607,7 +696,7 @@ def gameStateUpdate(updates, connection, clock, lock):
         print("problem sending data from thread to client")
         sys.exit()
 
-    return globalGame[clientKey]
+    return dx, dy
 
     pass
 
@@ -638,13 +727,23 @@ def main():
 
     # tries to bind the socket to the port with a 5 second delay if errors
     host = socket.gethostname()
-    while True:
-        try:
-            serverSock.bind( (host, serverPort) )
-            break
-        except:
-            print("Binding Error")
-            time.sleep(5)
+    
+    try:
+        serverSock.bind( (host, serverPort) )
+        
+    except:
+        print("Binding Error")
+        while True:
+            serverPort = 80
+            try:
+                serverSock.bind((host, serverPort))
+                break
+            except:
+                serverPort += 1
+                if serverPort > 11000:
+                    print("Could not find open port")
+                    sys.exit()
+            
 
     print(f"connected to {socket.gethostname()} at port {str(serverPort)}")
 
@@ -666,6 +765,7 @@ def main():
             try:
                 exc = t.exception(0.00001)
                 print(f"Thread died: {exc}")
+                sys.exit()
                 
                 
                 
@@ -712,20 +812,20 @@ def main():
                 try:
                     msg_data = conn.recv(length)
                     
-                    msg = msg_data.decode('utf-8')
+                    message = msg_data.decode('utf-8')
                    
                 except Exception as e:
                     print("Issue receiving initialized state")
                     continue
                 
 
-                if msg != "CHECK":
-                    
-                    msg = json.loads(msg)
+                if message != "CHECK":
+                    print("loaded")
+                    message = json.loads(message)
                 
                 
-                if "newThread" in msg.keys():
-
+                if "newThread" in message.keys():
+                    print("adding thread")
                     res = "SUCCESS"
                     length = msgLength(res)
                     try:
@@ -734,31 +834,52 @@ def main():
                         conn.sendall(res.encode("utf-8"))
                     except:
                         print("Error sending confirmation to thread")
+                        
                         inputs.remove(conn)
                         continue
+
+                    NUM_THREADS += 1
+
+                    if NUM_THREADS > 1:
+
+                        print("sending new player info")
+                        msg = {"status": "NEWCLIENT", "playerKey": message["playerKey"]}
+                        msg = json.dumps(msg)
+                        length = msgLength(msg)
+
+                        for key in threadData.keys():
+                            connection = threadData[key][0]
+                            
+
+                            while True:
+                                try:
+                                    connection.sendall(length.encode())
+
+                                    connection.sendall(msg.encode())
+                                    print("success")
+                                    break
+                                except TimeoutError:
+                                    print("error sending new player msg")
                     
-                    threadData[msg["playerKey"]] = msg["newThread"]
                     
+                    threadData[message["playerKey"]] = [conn]
+
                     continue
-                    
 
-                
-                #inputs.append(conn)
-
-                #players[msg["playerKey"]] = msg
                 global SLIME_WIDTH
                 global SLIME_HEIGHT
-                SLIME_WIDTH = msg["dimensions"]["slime"][0]
-                SLIME_HEIGHT = msg["dimensions"]["slime"][1]
+                SLIME_WIDTH = message["dimensions"]["slime"][0]
+                SLIME_HEIGHT = message["dimensions"]["slime"][1]
 
                 res = "GOOD"
-
-                threads.append(gameInit(conn, msg["playerKey"]))
+                
+                fr = [x for x in threadData.keys()]
+                threads.append(gameInit(conn, message["playerKey"], fr))
                 
                 
                 try:
                     
-                    length = msgLength(msg)
+                    length = msgLength(res)
                     
                     conn.sendall(length.encode())
                 
@@ -769,6 +890,8 @@ def main():
                 except:
                     print("Error sending initialize OK")
                     continue
+
+                
 
             else:
                 
@@ -787,6 +910,7 @@ def main():
                 if msg["status"] == "DEADCONN":
                     #If thread dies, server will remove thread data and close client connection so client can reconnect and use a new thread
                     NUM_THREADS -= 1
+                    print("dead connection message received")
                     inputs.remove(s)
                     del threadData[msg["playerKey"]]
                     s.close()
@@ -795,10 +919,12 @@ def main():
                     ##If thread tells server that client died, server will delete client from the game and the thread will kill itself
                     playerKey = msg["playerKey"]
                     del globalGame[playerKey]
+                    print("dead client message received")
                     inputs.remove(s)
                     s.close()
 
         for s in exceptions:
+            print("in exceptions")
             inputs.remove(s)
             s.close()
                     

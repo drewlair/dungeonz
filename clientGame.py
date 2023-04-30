@@ -16,6 +16,11 @@ def display_hp_exp(screen, hp, exp, lvl):
     screen.blit(exp_text, (250, 10))
     screen.blit(level_text, (500, 10))
 
+def display_win(screen):
+    font = pygame.font.Font(None, 100)
+    win_text = font.render(f"YOU WIN", True, (255,255,255))
+    screen.blit(win_text, (375,350))
+
 
 def main():
     print("in main")
@@ -97,6 +102,7 @@ def main():
     gameState["monsters"] = {}
     gameState["isSwinging"] = False
     gameState["isHurt"] = False
+    gameState["isWin"] = False
 
     
 
@@ -191,11 +197,12 @@ def main():
         #screen.blit(backgrounds[gameState["background"]], (0,0))
         #screen.blit(characterImages[gameState["character"]], (500,350))
         
-        muzic.play()
+        #muzic.play()
         failStreak = 0
         dx = 0
         dy = 0
         startTime = time.time_ns()
+        friends = []
         while True:
 
 
@@ -421,6 +428,16 @@ def main():
 
                 elif key == "isHurt":
                     gameState["isHurt"] = serverUpdate["isHurt"]
+                
+                elif key == "isWin":
+                    gameState["isWin"] = serverUpdate["isWin"]
+
+                elif key == "newClient":
+                    print("got new player msg!!")
+                    friends.append(serverUpdate["newClient"])
+                    gameState[serverUpdate["newClient"]] = newPlayerInit()
+                    print(serverUpdate["newClient"])
+                    print(gameState["playerKey"])
 
                 else:
                     print("No updates!")
@@ -439,6 +456,11 @@ def main():
             #Character Image
             
             screen.blit(characterImages[gameState["character"]],gameState["characterStats"]["XY"])
+            
+            for key in friends:
+                key = str(key)
+                print(serverUpdate)
+                screen.blit(characterImages[serverUpdate[key][0]], serverUpdate[key][1])
 
             #Monsters
 
@@ -449,6 +471,10 @@ def main():
             operations += 1
 
             display_hp_exp(screen, gameState["characterStats"]["hp"], gameState["characterStats"]["xp"], gameState["characterStats"]["lvl"])
+
+            if gameState["isWin"]:
+                
+                display_win(screen)
 
             pygame.display.update()
             clock.tick(60)
@@ -462,6 +488,18 @@ def msgLength(msg):
     for i in range(8 - len(str(length))):
         length = "0" + length
     return length
+
+def newPlayerInit():
+    newRes = {}
+   
+    newRes["background"] = "background_surf"
+    newRes["characterStats"] = {"hp": 100, "gold": 0, "xp": 0, "lvl": 0, "XY": (100, 100)}
+    newRes["character"] = "stanceRightMain"
+    newRes["isSwinging"] = False
+    newRes["isHurt"] = False
+
+
+    return newRes
 
 if __name__ == "__main__":
     main()
