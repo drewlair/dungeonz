@@ -21,9 +21,14 @@ def display_win(screen):
     win_text = font.render(f"YOU WIN", True, (255,255,255))
     screen.blit(win_text, (375,350))
 
+def you_died(screen):
+    font = pygame.font.Font(None, 100)
+    died_text = font.render(f"YOU DIED", True, (255,255,255))
+    screen.blit(died_text, (375,350))
+
 
 def main():
-    print("in main")
+    
     try:
         port = int(sys.argv[2])
     except:
@@ -36,17 +41,17 @@ def main():
         sys.exit()
 
 
-    print("before init")
+    
     pygame.init()
 
     xBorderMax = 1000
     yBorderMax = 700
-    print("bf screen")
+
     screen = pygame.display.set_mode((xBorderMax,yBorderMax)) #pygame.FULLSCREEN
-    print("past screen display")
+    
 
     clock = pygame.time.Clock()
-    print("past pygame inits")
+    
 
     stanceRightMain = pygame.image.load('guts(1).png')
     stanceLeftMain = pygame.image.load('guts(1).png')
@@ -59,7 +64,10 @@ def main():
     background_surf = pygame.image.load('startBackground.jpeg')
     slime_surf = pygame.image.load('slime.png')
     slime_width, slime_height = slime_surf.get_size()
-    char_invuln = False
+    bat_surf = pygame.image.load('bat.png')
+    bat_width, bat_height = slime_surf.get_size()
+    
+    
     
     charX_pos = 100
     charY_pos = 100
@@ -103,6 +111,7 @@ def main():
     gameState["isSwinging"] = False
     gameState["isHurt"] = False
     gameState["isWin"] = False
+    gameState["isDied"] = False
 
     
 
@@ -208,6 +217,11 @@ def main():
 
             ######################################
             #Receive user input
+            if gameState["isDied"]:
+                time.sleep(3)
+                clientSock.close()
+                pygame.quit()
+                sys.exit()
 
             if failStreak > 30:
                 while True:
@@ -278,7 +292,7 @@ def main():
             #Get collisions
          
             char_rect = characterImages[gameState["character"]].get_rect(topleft=gameState["characterStats"]["XY"])
-            bats_attck = False
+            
             enemies = None
             monI = []
             for monster in gameState["monsters"]:
@@ -302,8 +316,8 @@ def main():
 
                                 
                 elif monster == "bats":
-                    for batI, bat in enumerate(gameState["monsters"]["slimes"]):
-                        monst_rect = slime_surf.get_rect(topleft=(slime[0], slime[1]))
+                    for batI, bat in enumerate(gameState["monsters"]["bats"]):
+                        monst_rect = bat_surf.get_rect(topleft=(bat[0], bat[1]))
                         if monst_rect.colliderect(char_rect):
                             
 
@@ -311,7 +325,8 @@ def main():
                                 enemies = "bats"
                             
                             elif gameState["isSwinging"]:
-                                monI.append(("slimes", slimeI))
+                                monI.append(("bats", batI))
+                                
 
                             if "collisions" in update.keys():
                                 update["collisions"].append(("bats", batI))
@@ -422,6 +437,8 @@ def main():
                     for monster in serverUpdate[key].keys():
                         if monster == "slimes":
                             gameState["monsters"]["slimes"] = serverUpdate["monsters"]["slimes"]
+                        elif monster == "bats":
+                            gameState["monsters"]["bats"] = serverUpdate["monsters"]["bats"]
 
                 elif key == "isSwinging":
                     gameState["isSwinging"] = serverUpdate["isSwinging"]
@@ -431,13 +448,15 @@ def main():
                 
                 elif key == "isWin":
                     gameState["isWin"] = serverUpdate["isWin"]
+                
+                elif key == "isDied":
+                    gameState["isDied"] = serverUpdate["isDied"]
 
                 elif key == "newClient":
-                    print("got new player msg!!")
+                    
                     friends.append(serverUpdate["newClient"])
                     gameState[serverUpdate["newClient"]] = newPlayerInit()
-                    print(serverUpdate["newClient"])
-                    print(gameState["playerKey"])
+                    
 
                 
                 
@@ -453,12 +472,12 @@ def main():
                 screen.blit(background_surf,(0,0))
 
             #Character Image
-            
-            screen.blit(characterImages[gameState["character"]],gameState["characterStats"]["XY"])
+            if not gameState["isDied"]:
+                screen.blit(characterImages[gameState["character"]],gameState["characterStats"]["XY"])
             
             for key in friends:
                 key = str(key)
-                print(serverUpdate)
+                
                 screen.blit(characterImages[serverUpdate[key][0]], serverUpdate[key][1])
 
             #Monsters
@@ -467,13 +486,19 @@ def main():
                 if monster == "slimes":
                     for slime in gameState["monsters"]["slimes"]:
                         screen.blit(slime_surf, (slime[0], slime[1]))
+                elif monster == "bats":
+                    for bat in gameState["monsters"]["bats"]:
+                        screen.blit(bat_surf, (bat[0],bat[1]))
+
             operations += 1
 
             display_hp_exp(screen, gameState["characterStats"]["hp"], gameState["characterStats"]["xp"], gameState["characterStats"]["lvl"])
 
             if gameState["isWin"]:
-                
                 display_win(screen)
+
+            elif gameState["isDied"]:
+                you_died(screen)
 
             pygame.display.update()
             clock.tick(60)
@@ -502,3 +527,4 @@ def newPlayerInit():
 
 if __name__ == "__main__":
     main()
+
