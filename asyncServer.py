@@ -7,6 +7,7 @@ import select
 import json
 import math
 import random
+import traceback
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
 from threading import Lock
@@ -25,21 +26,45 @@ hurtTime = 0.3
 globalGame = {}
 MAX_THREADS = 4
 SLIME_SPEED = 2
-wave_slimes = {1: 3, 2: 5, 3: 8, 4: 12, 5: 15}
+wave_monsters = {1: (3,0), 2: (5,0), 3: (8,2), 4: (12,5), 5: (15,10)}
 SCREEN_WIDTH = 1000
 SCREEN_HEIGHT = 700
 SLIME_WIDTH = 100
 SLIME_HEIGHT = 100
 SLIME_HP = 50
 SLIME_DAMAGE = 10
+BAT_WIDTH = 50
+BAT_HEIGHT = 50
+BAT_HP = 50
 BAT_DAMAGE = 20
-executor = ThreadPoolExecutor(MAX_THREADS)
+
 numclients = 0
 threadData = {}
 serverPort = None
 
 
 threadLock = Lock()
+
+
+class ThreadPoolExecutorStackTraced(ThreadPoolExecutor):
+
+    def submit(self, fn, *args, **kwargs):
+        """Submits the wrapped function instead of `fn`"""
+
+        return super(ThreadPoolExecutorStackTraced, self).submit(
+            self._function_wrapper, fn, *args, **kwargs)
+
+    def _function_wrapper(self, fn, *args, **kwargs):
+        """Wraps `fn` in order to preserve the traceback of any kind of
+        raised exception
+
+        """
+        try:
+            return fn(*args, **kwargs)
+        except Exception:
+            raise sys.exc_info()[0](traceback.format_exc())
+        
+executor = ThreadPoolExecutorStackTraced(max_workers=MAX_THREADS)
 
 def playerHandler(sock, host, port, lock, playerKey, friends):
 
@@ -210,7 +235,8 @@ def playerHandler(sock, host, port, lock, playerKey, friends):
 
                 elif msg["status"] == "DEADCLIENT":
                     print("got dead client")
-                    threadFriends.remove(msg["playerKey"])
+                    if msg["playerKey"] in threadFriends:
+                        threadFriends.remove(msg["playerKey"])
 
             elif s is serverSock:
             
@@ -340,9 +366,6 @@ def gameInit(connection, playerKey, friends):
 
     
 
-    
-
-
     return future
 
 def updateSwing(swingData):
@@ -422,7 +445,6 @@ def gameStateUpdate(updates, connection, clock, lock, newClientKey, friends, dx,
         aliveBats = tempGlobal["monsters"]["bats"]
 
         if newClientKey:
-            print("LETS GO")
             updateRes["newClient"] = newClientKey
 
         
@@ -528,30 +550,38 @@ def gameStateUpdate(updates, connection, clock, lock, newClientKey, friends, dx,
                                 updateRes["isSwinging"] = True
                     
                 elif key == "attack":
-           
                     enemies = updates[key]
                     if enemies == "slimes" and not tempGlobal[clientKey]["isHurt"] and not tempGlobal[clientKey]["isSwinging"]:
 
                         tempGlobal[clientKey]["characterStats"]["hp"] -= SLIME_DAMAGE
-                        tempGlobal[clientKey]["character"] = ("hurtRight", time.time_ns() )
-                        tempGlobal[clientKey]["isHurt"] = True
-                        updateRes["character"] = "hurtRight"
-                        updateRes["characterStats"]["hp"] = tempGlobal[clientKey]["characterStats"]["hp"]
-                        updateRes["isHurt"] = True
+                        if tempGlobal[clientKey]["characterStats"]["hp"] < 0:
+                            tempGlobal[clientKey]["isDied"] = True
+                            updateRes["isDied"] = True
+
+                        else:
+                            tempGlobal[clientKey]["character"] = ("hurtRight", time.time_ns() )
+                            tempGlobal[clientKey]["isHurt"] = True
+                            updateRes["character"] = "hurtRight"
+                            updateRes["characterStats"]["hp"] = tempGlobal[clientKey]["characterStats"]["hp"]
+                            updateRes["isHurt"] = True
                         
 
                     elif enemies == "bats" and not tempGlobal[clientKey]["isHurt"] and not tempGlobal[clientKey]["isSwinging"]:
   
                         tempGlobal[clientKey]["characterStats"]["hp"] -= BAT_DAMAGE
-                        tempGlobal[clientKey]["character"] = ( "hurtRight", time.time_ns() ) 
-                        tempGlobal[clientKey]["isHurt"] = True
-                        updateRes["character"] = "hurtRight"
-                        updateRes["characterStats"]["hp"] = tempGlobal[clientKey]["characterStats"]["hp"]
-                        updateRes["isHurt"] = True
+                        if tempGlobal[clientKey]["characterStats"]["hp"] < 0:
+                            tempGlobal[clientKey]["isDied"] = True
+                            updateRes["isDied"] = True
+
+                        else:
+                            tempGlobal[clientKey]["character"] = ( "hurtRight", time.time_ns() ) 
+                            tempGlobal[clientKey]["isHurt"] = True
+                            updateRes["character"] = "hurtRight"
+                            updateRes["characterStats"]["hp"] = tempGlobal[clientKey]["characterStats"]["hp"]
+                            updateRes["isHurt"] = True
 
                     elif not tempGlobal[clientKey]["isHurt"]:
                         if enemies == "slimes" or enemies == "bats":
-                            print("edge case")
                             continue
 
                         for pair in enemies:
@@ -561,33 +591,34 @@ def gameStateUpdate(updates, connection, clock, lock, newClientKey, friends, dx,
                             index = pair[1]
 
                             if enemy == "slimes":
-                                print("stats??")
+                                
                                 stats = tempGlobal["monsters"]["slimes"][index]
-      
                                 if (stats[2] - ATTACK_DAMAGE) <= 0:
                                     
-                                    print("aliveslimes?")
                                     aliveSlimes[index] = None
                                     
-                                       
                                     tempGlobal[clientKey]["characterStats"]["xp"] += 10
                                     updateRes["characterStats"]["xp"] = tempGlobal[clientKey]["characterStats"]["xp"] 
                                     if tempGlobal[clientKey]["characterStats"]["xp"] >= 100:
                                        tempGlobal[clientKey]["characterStats"]["lvl"] += 1
                                        updateRes["characterStats"]["lvl"] = tempGlobal[clientKey]["characterStats"]["lvl"] 
                                        tempGlobal[clientKey]["characterStats"]["xp"] -= 100 
-                                    
                                 else:
-                                    #tempGlobal["monsters"]["slimes"][index] = ( stats[0],stats[1], stats[2]-ATTACK_DAMAGE )
-                                    print("bad stats?")
                                     aliveSlimes[index] = ( stats[0],stats[1], stats[2]-ATTACK_DAMAGE )
-
-                            if enemy == "bats":
+                            elif enemy == "bats":
                                 
                                 stats = tempGlobal["monsters"]["bats"][index]
+
                                 if (stats[2] - ATTACK_DAMAGE) <= 0:
                                     
                                     aliveBats[index] = None
+                                    tempGlobal[clientKey]["characterStats"]["xp"] += 10
+                                    updateRes["characterStats"]["xp"] = tempGlobal[clientKey]["characterStats"]["xp"] 
+                                    if tempGlobal[clientKey]["characterStats"]["xp"] >= 100:
+                                       tempGlobal[clientKey]["characterStats"]["lvl"] += 1
+                                       updateRes["characterStats"]["lvl"] = tempGlobal[clientKey]["characterStats"]["lvl"] 
+                                       tempGlobal[clientKey]["characterStats"]["xp"] -= 100
+
                                 else:
                                     aliveBats[index] = ( stats[0],stats[1], stats[2]-ATTACK_DAMAGE )
                 
@@ -595,11 +626,13 @@ def gameStateUpdate(updates, connection, clock, lock, newClientKey, friends, dx,
                     
                     for mon, index in updates[key]:
                         if mon == "slimes":
-                            
-                            movableSlimes.remove(index)
+                            if index < len(movableSlimes):
+                                movableSlimes.remove(index)
+                                
                             
                         elif mon == "bats":
-                            movableBats.remove(index)
+                            if index < len(movableBats):
+                                movableBats.remove(index)
                 
             if dx != 0 or dy != 0:
                 xy = tempGlobal[clientKey]["characterStats"]["XY"]
@@ -620,7 +653,6 @@ def gameStateUpdate(updates, connection, clock, lock, newClientKey, friends, dx,
         charCoords = tempGlobal[clientKey]["characterStats"]["XY"]
         ###########
         for slimeI in movableSlimes:
-            
             if not aliveSlimes[slimeI]:
                 continue
             stats = aliveSlimes[slimeI]
@@ -629,7 +661,6 @@ def gameStateUpdate(updates, connection, clock, lock, newClientKey, friends, dx,
                 continue
             
             aliveSlimes[slimeI] = (int(SLIME_SPEED*math.cos(dir)) + stats[0], int(SLIME_SPEED*math.sin(dir)) + stats[1], stats[2] )
-
         for batsI in movableBats:
             if not aliveBats[batsI]:
                 continue
@@ -638,14 +669,12 @@ def gameStateUpdate(updates, connection, clock, lock, newClientKey, friends, dx,
             if not dir:
                 continue
             
-            aliveBats[batsI] = (int(SLIME_SPEED*math.cos(dir)*(-1)) + stats[0], int(SLIME_SPEED*math.sin(dir)*(-1)) + stats[1], stats[2] )
+            aliveBats[batsI] = (int(SLIME_SPEED*math.cos(dir)) + stats[0], int(SLIME_SPEED*math.sin(dir)) + stats[1], stats[2] )
       
         tempGlobal["monsters"]["slimes"] = [slime for slime in aliveSlimes if slime is not None]
         updateRes["monsters"]["slimes"] = tempGlobal["monsters"]["slimes"]
         tempGlobal["monsters"]["bats"] = [bat for bat in aliveBats if bat is not None]
         updateRes["monsters"]["bats"] = tempGlobal["monsters"]["bats"]
-    
-
         if tempGlobal["wave"] == 0:
 
             slimes = []
@@ -655,7 +684,7 @@ def gameStateUpdate(updates, connection, clock, lock, newClientKey, friends, dx,
             global SLIME_WIDTH
             global SLIME_HP
 
-            for i in range(wave_slimes[1]):
+            for i in range(wave_monsters[1][0]):
                 slimes.append((random.randint(0, SCREEN_WIDTH - SLIME_WIDTH), random.randint(0, SCREEN_HEIGHT - SLIME_HEIGHT), SLIME_HP))
             tempGlobal["monsters"]["slimes"] = slimes
             tempGlobal["wave"] = 1
@@ -665,21 +694,29 @@ def gameStateUpdate(updates, connection, clock, lock, newClientKey, friends, dx,
         elif len(tempGlobal["monsters"]["slimes"]) == 0 and len(tempGlobal["monsters"]["bats"]) == 0:
             
             slimes = []
+            bats = []
             wave = tempGlobal["wave"] + 1
             
             if wave == 6:
                 
                 tempGlobal["isWin"] = True
                 updateRes["isWin"] = True
+
             else:
-                for i in range(wave_slimes[wave]):
+                for i in range(wave_monsters[wave][0]):
                     
                     slimes.append((random.randint(0, SCREEN_WIDTH - SLIME_WIDTH), random.randint(0, SCREEN_HEIGHT - SLIME_HEIGHT), SLIME_HP))
+                
+                for i in range(wave_monsters[wave][1]):
+                    bats.append((random.randint(0, SCREEN_WIDTH - BAT_WIDTH), random.randint(0, SCREEN_HEIGHT - BAT_HEIGHT), BAT_HP))
 
                 tempGlobal["monsters"]["slimes"] = slimes
                 tempGlobal["wave"] = wave
+                tempGlobal["monsters"]["bats"] = bats
+                updateRes["monsters"]["bats"] = bats
                 updateRes["monsters"]["slimes"] = slimes
                 updateRes["wave"] = wave
+                
 
 
         dxReturn = dx
@@ -689,8 +726,7 @@ def gameStateUpdate(updates, connection, clock, lock, newClientKey, friends, dx,
 
         
 
-    if newClientKey:
-        print("about to send dollars")
+    
     try:
         
         msg = json.dumps(updateRes)
@@ -844,8 +880,9 @@ def main():
                         conn.sendall(res.encode("utf-8"))
                     except:
                         print("Error sending confirmation to thread")
-                        
-                        inputs.remove(conn)
+                        if conn in inputs:
+                            if conn in inputs:
+                                inputs.remove(conn)
                         continue
 
                     NUM_THREADS += 1
@@ -911,8 +948,8 @@ def main():
                     msg = s.recv(length)
                 except:
                     print("error getting msg from connection")
-                    print(s)
-                    inputs.remove(s)
+                    if s in inputs:
+                        inputs.remove(s)
                     s.close()
                     continue
                 msg = json.loads(msg.decode("utf-8"))
@@ -921,7 +958,8 @@ def main():
                     #If thread dies, server will remove thread data and close client connection so client can reconnect and use a new thread
                     NUM_THREADS -= 1
                     print("dead connection message received")
-                    inputs.remove(s)
+                    if s in inputs:
+                        inputs.remove(s)
                     del threadData[msg["playerKey"]]
                     s.close()
 
@@ -930,12 +968,14 @@ def main():
                     playerKey = msg["playerKey"]
                     del globalGame[playerKey]
                     print("dead client message received")
-                    inputs.remove(s)
+                    if s in inputs:
+                        inputs.remove(s)
                     s.close()
 
         for s in exceptions:
             print("in exceptions")
-            inputs.remove(s)
+            if s in inputs:
+                inputs.remove(s)
             s.close()
                     
                 
@@ -949,3 +989,4 @@ def msgLength(msg):
 
 if __name__ == "__main__":
     main()
+
