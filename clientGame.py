@@ -439,8 +439,7 @@ def main():
                     print(serverUpdate["newClient"])
                     print(gameState["playerKey"])
 
-                else:
-                    print("No updates!")
+                
                 
             ###################################
 

@@ -45,8 +45,12 @@ def playerHandler(sock, host, port, lock, playerKey, friends):
 
     threadFriends = friends
     exit = False
-    
-    
+    numClients = 0
+    clientIndex = -1
+    if len(threadFriends) > 0:
+        print("threadFriends are")
+        print(threadFriends)
+        numClients = len(threadFriends)
     dx = 0
     dy = 0
     ############################
@@ -151,6 +155,11 @@ def playerHandler(sock, host, port, lock, playerKey, friends):
         if timeoutStreak > 100:
             print("player disconnected")
             return True
+        if numClients > 0 and not addClient[0]:
+            clientIndex += 1
+            addClient = (True, friends[clientIndex])
+
+
         try:
             readable, _, _ = select.select(inputs, [], [], 30)
         except TimeoutError:
@@ -224,6 +233,7 @@ def playerHandler(sock, host, port, lock, playerKey, friends):
                     print("got new CLIENT")
                     threadFriends.append(msg["playerKey"])
                     addClient = (True, msg["playerKey"])
+                    numClients += 1
 
 
 
@@ -254,12 +264,15 @@ def playerHandler(sock, host, port, lock, playerKey, friends):
                 timeoutStreak = 0
 
                 msg = json.loads(msg.decode())
-                if addClient[0]:
+                
+                if addClient[0] and numClients > 0:
                     print("in add client")
                     print(addClient)
                     dx, dy = gameStateUpdate(msg, conn, playerClock, lock, addClient[1], threadFriends, dx, dy)
                     addClient = (False, None)
-                dx, dy = gameStateUpdate(msg, conn, playerClock, lock, None, threadFriends, dx, dy)
+                    numClients -= 1
+                else:
+                    dx, dy = gameStateUpdate(msg, conn, playerClock, lock, None, threadFriends, dx, dy)
 
 def gameInit(connection, playerKey, friends):
 
@@ -583,7 +596,6 @@ def gameStateUpdate(updates, connection, clock, lock, newClientKey, friends, dx,
                     for mon, index in updates[key]:
                         if mon == "slimes":
                             
-                            print("probable case")
                             movableSlimes.remove(index)
                             
                         elif mon == "bats":
@@ -604,9 +616,7 @@ def gameStateUpdate(updates, connection, clock, lock, newClientKey, friends, dx,
                     updateRes[friend] = (globalGame[friend]["character"][0], globalGame[friend]["characterStats"]["XY"])
                 else:
                     updateRes[friend] = (globalGame[friend]["character"], globalGame[friend]["characterStats"]["XY"])
-        if len(friends) > 0:
-            print("updateREscheck")
-            print(updateRes)
+        
         charCoords = tempGlobal[clientKey]["characterStats"]["XY"]
         ###########
         for slimeI in movableSlimes:
