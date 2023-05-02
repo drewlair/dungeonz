@@ -203,12 +203,8 @@ def main():
         if msg == "START":
             print("lets play!")
         else:
-            print("msg not start")
-            print(msg)
+            print("msg not start!")
             continue
-    
-        #screen.blit(backgrounds[gameState["background"]], (0,0))
-        #screen.blit(characterImages[gameState["character"]], (500,350))
         
         muzic.play()
         failStreak = 0
@@ -243,7 +239,7 @@ def main():
                 sys.exit()
             
             if failStreak > 2:
-                
+                failStreak = 0
                 while True:
                     try:
                         msg = {}
@@ -254,17 +250,84 @@ def main():
                         clientSock.sendall(length.encode("utf-8"))
                         clientSock.sendall(msg.encode("utf-8"))
                         
-                        
-                        breakMainWhile = True
                         print("out of failstreak")
-                        break
+                        
                     except:
                         print("Error sending deadthread msg to server")
                         break
 
-            
-            if breakMainWhile:
-                break
+                    
+                    
+                    
+                    try:
+                        length = clientSock.recv(8)
+                        
+                        length = int(length.decode())
+
+                        msg = clientSock.recv(length)
+                        
+                        msg = msg.decode()
+
+                    except Exception as e:
+                        print(e)
+                        print("Error receiving INIT update from server")
+                        continue
+
+                        
+                    print(msg)
+                    if msg == "GOOD":
+                        try:
+                            length = clientSock.recv(8)
+                        
+                            length = int(length.decode())
+
+                            msg = clientSock.recv(length)
+                        
+                            msg = msg.decode()
+
+                        except Exception as e:
+                            print(e)
+                            print("Error receiving INIT update from server")
+                            continue
+                    msg = json.loads(msg)
+
+                    threadSock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                    threadSock.settimeout(5)
+                    host = msg["host"]
+                    port = msg["port"]
+                    try:
+                        print(f"host is {host}, {port}")
+                        threadSock.connect((msg["host"], int(msg["port"])))
+                    except:
+                        print("Error conncting to server Thread")
+                        continue
+                    msg = "INIT"
+                    length = msgLength(msg)
+                    try:
+                        threadSock.sendall(length.encode("utf-8"))
+                        threadSock.sendall(msg.encode("utf-8"))
+                    except:
+                        print("Error sending init to thread")
+                        continue
+                    
+                    try:
+                        length = threadSock.recv(8)
+                        length = int(length.decode())
+                        msg = threadSock.recv(length)
+                    except:
+                        print("Error receiving start msg from thread server")
+                        continue
+                    
+                    msg = msg.decode()
+                    if msg == "START":
+                        print("lets play!")
+                    else:
+                        print("msg not start")
+                        print(msg)
+                        continue
+                    break
+                    
+
 
             update = {}
             update["playerKey"] = gameState["playerKey"]
@@ -288,7 +351,6 @@ def main():
 
 
                             clientSock.sendall(msg.encode("utf-8"))
-                            print("sent")
                             break
                         except:
                             print("error sending timeout msg to server")
@@ -442,6 +504,11 @@ def main():
 
             try:
                 length = threadSock.recv(8)
+
+                if length == '':
+                    print("Error receiving update from server thread")
+                    failStreak += 1
+                    continue
                
                 length = int(length.decode())
                
