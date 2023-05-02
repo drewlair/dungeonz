@@ -67,14 +67,14 @@ class ThreadPoolExecutorStackTraced(ThreadPoolExecutor):
 executor = ThreadPoolExecutorStackTraced(max_workers=MAX_THREADS)
 
 def playerHandler(sock, host, port, lock, playerKey, friends):
-
+    
     threadFriends = friends
     exit = False
     numClients = 0
     clientIndex = -1
+    
     if len(threadFriends) > 0:
-        print("threadFriends are")
-        print(threadFriends)
+       
         numClients = len(threadFriends)
     dx = 0
     dy = 0
@@ -88,7 +88,7 @@ def playerHandler(sock, host, port, lock, playerKey, friends):
         serverSock.connect((socket.gethostname(), serverPort))
     except:
         print("Couldn't connect to server")
-        return False
+        return playerKey
     
     msg = {}
     msg["newThread"] = [host, port]
@@ -102,18 +102,18 @@ def playerHandler(sock, host, port, lock, playerKey, friends):
         serverSock.sendall(msg.encode("utf-8"))
     except:
         print("Error sending thread data to server")
-        return False
+        return playerKey
     
     try:
         length = serverSock.recv(8)
 
     except:
         print("Error recieving msg length from server")
-        return False
+        return playerKey
     
     if length.decode() == '':
         print("Bad length msg from server")
-        return False
+        return playerKey
     
     length = int(length.decode())
 
@@ -122,11 +122,11 @@ def playerHandler(sock, host, port, lock, playerKey, friends):
 
     except:
         print("Error recieving msg from server")
-        return False
+        return playerKey
     
     if msg.decode("utf-8") != "SUCCESS":
         print("Server Error, stopping thread")
-        return False
+        return playerKey
     
     print("thread starting client")
     ####################################
@@ -176,38 +176,57 @@ def playerHandler(sock, host, port, lock, playerKey, friends):
     #Select loop for client updates and server interrupts
 
     while True:
-        
+       
         if timeoutStreak > 100:
             print("player disconnected")
-            return True
-        if numClients > 0 and not addClient[0]:
+            msg = {"status": "DEADCONN", "playerKey": playerKey}
+            msg = json.dumps(msg)
+            length = msgLength(msg)
+            try:
+                serverSock.sendall(length.encode())
+
+                serverSock.sendall(msg.encode())
+                
+            except:
+                print("Error sending deadclient to server")
+                return playerKey
+            for s in inputs:
+                s.close()
+            return playerKey
+
+            
+        elif numClients > 0 and not addClient[0]:
             clientIndex += 1
             addClient = (True, friends[clientIndex])
 
-
+        
         try:
             readable, _, _ = select.select(inputs, [], [], 30)
         except TimeoutError:
-            print("threadwaiting")
+            print("thread is waiting")
             exit = True
             
 
         if exit:
-            msg = "DEADCLIENT"
+            msg = {"status": "DEADCONN", "playerKey": playerKey}
+            msg = json.dumps(msg)
             length = msgLength(msg)
             try:
-                serverSock.sendall(length.encode("utf-8"))
+                serverSock.sendall(length.encode())
 
-                serverSock.sendall(msg.encode("utf-8"))
+                serverSock.sendall(msg.encode())
+                
             except:
                 print("Error sending deadclient to server")
-                return False
+
+            return playerKey
+        
 
         for s in readable:
             if s is sock:
-                print("in sock")
+                
                 conn, addr = s.accept()
-                print(f"serverAddr is {str(addr)}")
+                
                 if addr[0] is not socket.gethostname() and addr[1] is not serverPort:
                     conn.close()
                     continue
@@ -229,21 +248,21 @@ def playerHandler(sock, host, port, lock, playerKey, friends):
                 
                 msg = json.loads(msg)
                 if msg["status"] == "NEWCLIENT":
-                    print("got new CLIENT")
+                    
                     threadFriends.append(msg["playerKey"])
                     addClient = (True, msg["playerKey"])
 
                 elif msg["status"] == "DEADCLIENT":
-                    print("got dead client")
+                    
                     if msg["playerKey"] in threadFriends:
                         threadFriends.remove(msg["playerKey"])
 
             elif s is serverSock:
             
-                print("in serverSock")
+                
                 try:
                     length = serverSock.recv(8)
-                    print(1)
+                    
                     length = int(length.decode())
                     if length == '':
                         print("error receiving data from server")
@@ -252,11 +271,11 @@ def playerHandler(sock, host, port, lock, playerKey, friends):
                 except Exception as e:
                     print(e)
                     print("error receiving new client msg from server")
-                print(2)
+                
                 msg = json.loads(msg.decode())
 
                 if msg["status"] == "NEWCLIENT":
-                    print("got new CLIENT")
+                    
                     threadFriends.append(msg["playerKey"])
                     addClient = (True, msg["playerKey"])
                     numClients += 1
@@ -292,8 +311,7 @@ def playerHandler(sock, host, port, lock, playerKey, friends):
                 msg = json.loads(msg.decode())
                 
                 if addClient[0] and numClients > 0:
-                    print("in add client")
-                    print(addClient)
+                    
                     dx, dy = gameStateUpdate(msg, conn, playerClock, lock, addClient[1], threadFriends, dx, dy)
                     addClient = (False, None)
                     numClients -= 1
@@ -308,15 +326,14 @@ def gameInit(connection, playerKey, friends):
 
     globalGame[playerKey] = {}
     globalGame[playerKey]["background"] = "background_surf"
-    globalGame[playerKey]["characterStats"] = {"hp": 100, "gold": 0, "xp": 0, "lvl": 0, "XY": (100, 100)}
+    globalGame[playerKey]["characterStats"] = {"hp": 100, "gold": 0, "xp": 0, "lvl": 1, "XY": (100, 100)}
     globalGame[playerKey]["character"] = "stanceRightMain"
     globalGame[playerKey]["isSwinging"] = False
     globalGame[playerKey]["isHurt"] = False
     #globalGame[playerKey]["isCooldown"] = False
-    print("here")
-    print(friends)
+    
     if len(friends) == 0:
-        print("correct!")
+        
         globalGame["isWin"] = False
         globalGame["monsters"] = {"slimes": [], "bats": []}
         globalGame["wave"] = 0
@@ -445,6 +462,7 @@ def gameStateUpdate(updates, connection, clock, lock, newClientKey, friends, dx,
         aliveBats = tempGlobal["monsters"]["bats"]
 
         if newClientKey:
+            print("LETS GO")
             updateRes["newClient"] = newClientKey
 
         
@@ -550,6 +568,7 @@ def gameStateUpdate(updates, connection, clock, lock, newClientKey, friends, dx,
                                 updateRes["isSwinging"] = True
                     
                 elif key == "attack":
+                    
                     enemies = updates[key]
                     if enemies == "slimes" and not tempGlobal[clientKey]["isHurt"] and not tempGlobal[clientKey]["isSwinging"]:
 
@@ -582,6 +601,7 @@ def gameStateUpdate(updates, connection, clock, lock, newClientKey, friends, dx,
 
                     elif not tempGlobal[clientKey]["isHurt"]:
                         if enemies == "slimes" or enemies == "bats":
+                            
                             continue
 
                         for pair in enemies:
@@ -597,14 +617,18 @@ def gameStateUpdate(updates, connection, clock, lock, newClientKey, friends, dx,
                                     
                                     aliveSlimes[index] = None
                                     
+                                       
                                     tempGlobal[clientKey]["characterStats"]["xp"] += 10
                                     updateRes["characterStats"]["xp"] = tempGlobal[clientKey]["characterStats"]["xp"] 
                                     if tempGlobal[clientKey]["characterStats"]["xp"] >= 100:
                                        tempGlobal[clientKey]["characterStats"]["lvl"] += 1
                                        updateRes["characterStats"]["lvl"] = tempGlobal[clientKey]["characterStats"]["lvl"] 
                                        tempGlobal[clientKey]["characterStats"]["xp"] -= 100 
+                                    
                                 else:
+                                    
                                     aliveSlimes[index] = ( stats[0],stats[1], stats[2]-ATTACK_DAMAGE )
+                                    
                             elif enemy == "bats":
                                 
                                 stats = tempGlobal["monsters"]["bats"][index]
@@ -645,14 +669,18 @@ def gameStateUpdate(updates, connection, clock, lock, newClientKey, friends, dx,
     
 
         for friend in friends:
-                if tempGlobal[friend]["isSwinging"] or tempGlobal[friend]["isHurt"]:
-                    updateRes[friend] = (globalGame[friend]["character"][0], globalGame[friend]["characterStats"]["XY"])
-                else:
-                    updateRes[friend] = (globalGame[friend]["character"], globalGame[friend]["characterStats"]["XY"])
+            if friend not in tempGlobal.keys():
+                friends.remove(friend)
+            elif tempGlobal[friend]["isSwinging"] or tempGlobal[friend]["isHurt"]:
+                updateRes[friend] = (globalGame[friend]["character"][0], globalGame[friend]["characterStats"]["XY"])
+            else:
+                updateRes[friend] = (globalGame[friend]["character"], globalGame[friend]["characterStats"]["XY"])
         
         charCoords = tempGlobal[clientKey]["characterStats"]["XY"]
         ###########
+        
         for slimeI in movableSlimes:
+            
             if not aliveSlimes[slimeI]:
                 continue
             stats = aliveSlimes[slimeI]
@@ -661,6 +689,7 @@ def gameStateUpdate(updates, connection, clock, lock, newClientKey, friends, dx,
                 continue
             
             aliveSlimes[slimeI] = (int(SLIME_SPEED*math.cos(dir)) + stats[0], int(SLIME_SPEED*math.sin(dir)) + stats[1], stats[2] )
+        
         for batsI in movableBats:
             if not aliveBats[batsI]:
                 continue
@@ -675,6 +704,7 @@ def gameStateUpdate(updates, connection, clock, lock, newClientKey, friends, dx,
         updateRes["monsters"]["slimes"] = tempGlobal["monsters"]["slimes"]
         tempGlobal["monsters"]["bats"] = [bat for bat in aliveBats if bat is not None]
         updateRes["monsters"]["bats"] = tempGlobal["monsters"]["bats"]
+        
         if tempGlobal["wave"] == 0:
 
             slimes = []
@@ -719,14 +749,14 @@ def gameStateUpdate(updates, connection, clock, lock, newClientKey, friends, dx,
                 
 
 
-        dxReturn = dx
-        dyReturn = dy
+        
         globalGame = tempGlobal.copy()
 
 
         
 
-    
+    if newClientKey:
+        print("about to send dollars")
     try:
         
         msg = json.dumps(updateRes)
@@ -769,7 +799,7 @@ def main():
 
     # create UDP socket with timeout of 1 second 
     serverSock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    serverSock.settimeout(5)
+    serverSock.settimeout(60)
 
     # tries to bind the socket to the port with a 5 second delay if errors
     host = socket.gethostname()
@@ -810,27 +840,36 @@ def main():
             
             try:
                 exc = t.exception(0.00001)
+                if not exc:
+                    continue
+                threads.remove(t)
+                NUM_THREADS -= 1
                 print(f"Thread died: {exc}")
-                sys.exit()
+                playerKey = t.result()
+
+                if playerKey in inputs:
+
+                    inputs.remove(playerKey)
                 
                 
                 
             except:
-                print("checked thread")
+                print("checking threads")
             
         try:
             
-            readable, _, exceptions = select.select( inputs, [],  [], 60 )
+            readable, _, exceptions = select.select( inputs, [],  [], 10 )
             
             
         except TimeoutError:
-            print("waiting")
+            print("server waiting")
+            continue
         global numclients
         
         for s in readable:
             if s is serverSock:
               
-           
+                
                 try:
                     conn, addr = s.accept()
                     print("Accepted new connection")
@@ -866,12 +905,11 @@ def main():
                 
 
                 if message != "CHECK":
-                    print("loaded")
+                    
                     message = json.loads(message)
                 
                 
                 if "newThread" in message.keys():
-                    print("adding thread")
                     res = "SUCCESS"
                     length = msgLength(res)
                     try:
@@ -889,7 +927,6 @@ def main():
 
                     if NUM_THREADS > 1:
 
-                        print("sending new player info")
                         msg = {"status": "NEWCLIENT", "playerKey": message["playerKey"]}
                         msg = json.dumps(msg)
                         length = msgLength(msg)
@@ -903,7 +940,7 @@ def main():
                                     connection.sendall(length.encode())
 
                                     connection.sendall(msg.encode())
-                                    print("success")
+                                    
                                     break
                                 except TimeoutError:
                                     print("error sending new player msg")
@@ -921,7 +958,11 @@ def main():
                 res = "GOOD"
                 
                 fr = [x for x in threadData.keys()]
-                threads.append(gameInit(conn, message["playerKey"], fr))
+                future = gameInit(conn, message["playerKey"], fr)
+                if not future:
+                    print("gameInit failure")
+                    return playerKey
+                threads.append(future)
                 
                 
                 try:
@@ -946,13 +987,16 @@ def main():
                     length = s.recv(8)
                     length = int(length.decode("utf-8"))
                     msg = s.recv(length)
-                except:
-                    print("error getting msg from connection")
+                except Exception as e:
+                    print(e)
                     if s in inputs:
                         inputs.remove(s)
                     s.close()
                     continue
+                
                 msg = json.loads(msg.decode("utf-8"))
+
+                
 
                 if msg["status"] == "DEADCONN":
                     #If thread dies, server will remove thread data and close client connection so client can reconnect and use a new thread
@@ -961,20 +1005,28 @@ def main():
                     if s in inputs:
                         inputs.remove(s)
                     del threadData[msg["playerKey"]]
-                    s.close()
+                    
 
                 elif msg["status"] == "DEADCLIENT":
                     ##If thread tells server that client died, server will delete client from the game and the thread will kill itself
+                    print("dead client msg received")
                     playerKey = msg["playerKey"]
                     del globalGame[playerKey]
-                    print("dead client message received")
                     if s in inputs:
                         inputs.remove(s)
                     s.close()
 
+                elif msg["status"] == "CLIENTEXIT":
+                    playerKey = msg["playerKey"]
+                    del globalGame[playerKey]
+                    if s in inputs:
+                        print("client successfully exitted from game")
+                        inputs.remove(s)
+                    s.close()
+
         for s in exceptions:
-            print("in exceptions")
             if s in inputs:
+                print("got exception!!")
                 inputs.remove(s)
             s.close()
                     
@@ -989,4 +1041,3 @@ def msgLength(msg):
 
 if __name__ == "__main__":
     main()
-
