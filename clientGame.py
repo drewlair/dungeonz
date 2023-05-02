@@ -46,7 +46,7 @@ def main():
 
     xBorderMax = 1000
     yBorderMax = 700
-
+    
     screen = pygame.display.set_mode((xBorderMax,yBorderMax)) #pygame.FULLSCREEN
     
 
@@ -104,7 +104,7 @@ def main():
     gameState["background"] = "background_surf"
     gameState["borders"] = (xBorderMax, yBorderMax)
     gameState["character"] = "stanceRightMain"
-    gameState["characterStats"] = {"hp": 100, "gold": 0, "xp": 0, "lvl": 0, "XY": (charX_pos, charY_pos)}
+    gameState["characterStats"] = {"hp": 100, "gold": 0, "xp": 0, "lvl": 1, "XY": (charX_pos, charY_pos)}
     gameState["status"] = "INIT"
     gameState["round"] = 0
     gameState["monsters"] = {}
@@ -118,21 +118,24 @@ def main():
 
     # establish server connection
     clientSock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    clientSock.settimeout(5)
-    
+    clientSock.settimeout(120)
+    breakMainWhile = False
     while True:
+        
+        if not breakMainWhile:
+            
 
-        try:
-            clientSock.connect((host, port))
-        except Exception as e:
-            print(e)
-            print("Error connecting to server")
-            sys.exit()
-            continue
+            try:
+                clientSock.connect((host, port))
+            except Exception as e:
+                print(e)
+                print("Error connecting to server")
+                sys.exit()
+                continue
 
-        print(f"Successfully connected to {host} at port {str(port)}")
+            print(f"Successfully connected to {host} at port {str(port)}")
 
-        #msg = json.dumps(gameState)
+        breakMainWhile = False
         msg = defaultdict(dict)
         msg["dimensions"]["slime"] = (slime_width, slime_height)
         msg["playerKey"] = gameState["playerKey"]
@@ -145,7 +148,7 @@ def main():
             clientSock.sendall(length.encode("utf-8"))
             
             clientSock.sendall(msg.encode("utf-8"))
-            print("success init send")
+            
 
         except:
             print("Failed to send initialized state to server")
@@ -162,9 +165,11 @@ def main():
 
         except Exception as e:
             print(e)
-            print("Error receiving update from server 1")
+            print("Error receiving INIT update from server")
             continue
 
+            
+        
         msg = json.loads(msg)
 
         threadSock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -174,7 +179,6 @@ def main():
         try:
             print(f"host is {host}, {port}")
             threadSock.connect((msg["host"], int(msg["port"])))
-            print("Connected to thread")
         except:
             print("Error conncting to server Thread")
             continue
@@ -206,24 +210,40 @@ def main():
         #screen.blit(backgrounds[gameState["background"]], (0,0))
         #screen.blit(characterImages[gameState["character"]], (500,350))
         
-        #muzic.play()
+        muzic.play()
         failStreak = 0
-        dx = 0
-        dy = 0
+        
         startTime = time.time_ns()
         friends = []
         while True:
-
+            
 
             ######################################
             #Receive user input
             if gameState["isDied"]:
                 time.sleep(3)
+                TOstreak = 0
+                while TOstreak < 30:
+                    try:
+                        msg = {}
+                        msg["status"] = "CLIENTEXIT"
+                        msg["playerKey"] = gameState["playerKey"]
+                        msg = json.dumps(msg)
+                        length = msgLength(msg)
+                        clientSock.sendall(length.encode("utf-8"))
+                        clientSock.sendall(msg.encode("utf-8"))
+                        
+                        break
+                    except:
+                        print("Error sending deadthread msg to server")
+                        TOstreak += 1
+                print("closed")
                 clientSock.close()
                 pygame.quit()
                 sys.exit()
-
-            if failStreak > 30:
+            
+            if failStreak > 2:
+                
                 while True:
                     try:
                         msg = {}
@@ -233,10 +253,17 @@ def main():
                         length = msgLength(msg)
                         clientSock.sendall(length.encode("utf-8"))
                         clientSock.sendall(msg.encode("utf-8"))
+                        
+                        
+                        breakMainWhile = True
+                        print("out of failstreak")
                         break
                     except:
                         print("Error sending deadthread msg to server")
+                        break
 
+            
+            if breakMainWhile:
                 break
 
             update = {}
@@ -249,6 +276,27 @@ def main():
                     print(f"system throughput was {throughput} ops/ sec")
                     latency = ((endtime - startTime) / operations) / 10**9
                     print(f"system latency was {latency} sec / ops")
+
+
+                    msg = {"status": "CLIENTEXIT", "playerKey": gameState["playerKey"]}
+                    msg = json.dumps(msg)
+                    length = msgLength(msg)
+                    TOstreak = 0
+                    while TOstreak < 30:
+                        try:
+                            clientSock.sendall(length.encode("utf-8"))
+
+
+                            clientSock.sendall(msg.encode("utf-8"))
+                            print("sent")
+                            break
+                        except:
+                            print("error sending timeout msg to server")
+                            TOstreak += 1
+                            time.sleep(1)
+
+                    print("closed")
+                    time.sleep(3)
                     clientSock.close()
                     pygame.quit()
                     sys.exit()
@@ -384,7 +432,6 @@ def main():
                     failStreak += 1
                     continue
 
-            failStreak = 0
                 
 
             ###################################
@@ -406,10 +453,11 @@ def main():
 
                 
             except OSError:
-                print("Error receiving update from server 2")
+                print("Error receiving update from server thread")
+                failStreak += 1
                 continue
 
-
+            failStreak = 0
             ###################################  
         
 
@@ -517,7 +565,7 @@ def newPlayerInit():
     newRes = {}
    
     newRes["background"] = "background_surf"
-    newRes["characterStats"] = {"hp": 100, "gold": 0, "xp": 0, "lvl": 0, "XY": (100, 100)}
+    newRes["characterStats"] = {"hp": 100, "gold": 0, "xp": 0, "lvl": 1, "XY": (100, 100)}
     newRes["character"] = "stanceRightMain"
     newRes["isSwinging"] = False
     newRes["isHurt"] = False
@@ -527,4 +575,3 @@ def newPlayerInit():
 
 if __name__ == "__main__":
     main()
-
