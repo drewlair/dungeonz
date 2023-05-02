@@ -38,6 +38,7 @@ BAT_HEIGHT = 50
 BAT_HP = 50
 BAT_DAMAGE = 20
 
+
 numclients = 0
 threadData = {}
 serverPort = None
@@ -145,10 +146,12 @@ def playerHandler(sock, host, port, lock, playerKey, friends):
         length = conn.recv(8)
         length = int(length.decode())
         msg = conn.recv(length)
+
     except:
         print("Error receiving init message from player")
         sys.exit()
     msg = msg.decode("utf-8")
+
     if msg != "INIT":
         print("did not receive INIT message")
         sys.exit()
@@ -174,8 +177,9 @@ def playerHandler(sock, host, port, lock, playerKey, friends):
 
     ############################
     #Select loop for client updates and server interrupts
-
+    
     while True:
+        
        
         if timeoutStreak > 100:
             print("player disconnected")
@@ -848,7 +852,6 @@ def main():
                 playerKey = t.result()
 
                 if playerKey in inputs:
-
                     inputs.remove(playerKey)
                 
                 
@@ -872,11 +875,12 @@ def main():
                 
                 try:
                     conn, addr = s.accept()
-                    print("Accepted new connection")
+                    print("Accepting new player")
                 except:
                     print("Error accepting connection")
                     continue
-
+                if conn in inputs:
+                    continue
                 inputs.append(conn)
 
                
@@ -954,7 +958,7 @@ def main():
                 global SLIME_HEIGHT
                 SLIME_WIDTH = message["dimensions"]["slime"][0]
                 SLIME_HEIGHT = message["dimensions"]["slime"][1]
-
+                print(message)
                 res = "GOOD"
                 
                 fr = [x for x in threadData.keys()]
@@ -1000,16 +1004,20 @@ def main():
 
                 if msg["status"] == "DEADCONN":
                     #If thread dies, server will remove thread data and close client connection so client can reconnect and use a new thread
-                    NUM_THREADS -= 1
-                    print("dead connection message received")
-                    if s in inputs:
-                        inputs.remove(s)
+                    
+                    inputs.remove(threadData[msg["playerKey"]][0])
+                    
                     del threadData[msg["playerKey"]]
+                    fr = [x for x in threadData.keys()]
+                    future = gameInit(s, msg["playerKey"], fr)
+                    if not future:
+                        print("gameInit failure")
+                        return msg["playerKey"]
+                    threads.append(future)
                     
 
                 elif msg["status"] == "DEADCLIENT":
                     ##If thread tells server that client died, server will delete client from the game and the thread will kill itself
-                    print("dead client msg received")
                     playerKey = msg["playerKey"]
                     del globalGame[playerKey]
                     if s in inputs:
@@ -1041,3 +1049,4 @@ def msgLength(msg):
 
 if __name__ == "__main__":
     main()
+
