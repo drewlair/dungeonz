@@ -592,6 +592,10 @@ def main():
             
             for key in friends:
                 key = str(key)
+                if key not in serverUpdate:
+                    friends.remove(key)
+                    continue
+                print(serverUpdate)
                 
                 screen.blit(characterImages[serverUpdate[key][0]], serverUpdate[key][1])
 
