@@ -58,7 +58,6 @@ class ThreadPoolExecutorStackTraced(ThreadPoolExecutor):
     def _function_wrapper(self, fn, *args, **kwargs):
         """Wraps `fn` in order to preserve the traceback of any kind of
         raised exception
-
         """
         try:
             return fn(*args, **kwargs)
@@ -1049,4 +1048,3 @@ def msgLength(msg):
 
 if __name__ == "__main__":
     main()
-
