@@ -19,10 +19,10 @@ How to run:
 8. To stop the server, run "Ctrl-C" in the terminal running the program.
 
 How to play:
-W - up
-A - left
-S - down
-D - right
+W - up,
+A - left,
+S - down,
+D - right,
 Space - swing sword
 
 If you have questions about the game functionality or ideas to make it better, feel free to email me at drewlair41@gmail.com
