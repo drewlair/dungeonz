@@ -1,6 +1,6 @@
 Dungeonz
 
-How to play:
+How to run:
 1. Create two sperate terminals in the "dungeonz" main directory.
 2. For the first terminal, run the command "python dungeonz_server.py <port#>".
   - fill in <port#> with the port you want your server.
@@ -18,4 +18,13 @@ How to play:
   - It is very important that the <hostname> and <port#> are the same as given by the server, whcih must still be running. 
 8. To stop the server, run "Ctrl-C" in the terminal running the program.
 
+How to play:
+W - up
+A - left
+S - down
+D - right
+Space - swing sword
+
 If you have questions about the game functionality or ideas to make it better, feel free to email me at drewlair41@gmail.com
+
+Have fun!
