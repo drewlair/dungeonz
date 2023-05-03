@@ -52,22 +52,20 @@ def main():
 
     clock = pygame.time.Clock()
     
-
-    stanceRightMain = pygame.image.load('guts(1).png')
-    stanceLeftMain = pygame.image.load('guts(1).png')
-    swingRightStart = pygame.image.load('swingRightStart.png')
-    swingRightMid = pygame.image.load('midSwingRight.png')
-    swingRightUp = pygame.image.load('swingRightUp.png')
-    swingRightFinish = pygame.image.load('swingRightFinish.png')
-    swingRightFinal = pygame.image.load('swingRightFinal.png')
-    hurtRight = pygame.image.load('guts_hurt.png')
-    background_surf = pygame.image.load('startBackground.jpeg')
-    slime_surf = pygame.image.load('slime.png')
+    # load assets
+    stanceRightMain = pygame.image.load('./img_assets/guts(1).png')
+    stanceLeftMain = pygame.image.load('./img_assets/guts(1).png')
+    swingRightStart = pygame.image.load('./img_assets/swingRightStart.png')
+    swingRightMid = pygame.image.load('./img_assets/midSwingRight.png')
+    swingRightUp = pygame.image.load('./img_assets/swingRightUp.png')
+    swingRightFinish = pygame.image.load('./img_assets/swingRightFinish.png')
+    swingRightFinal = pygame.image.load('./img_assets/swingRightFinal.png')
+    hurtRight = pygame.image.load('./img_assets/guts_hurt.png')
+    background_surf = pygame.image.load('./img_assets/startBackground.jpeg')
+    slime_surf = pygame.image.load('./img_assets/slime.png')
     slime_width, slime_height = slime_surf.get_size()
-    bat_surf = pygame.image.load('bat.png')
+    bat_surf = pygame.image.load('./img_assets/bat.png')
     bat_width, bat_height = slime_surf.get_size()
-    
-    
     
     charX_pos = 100
     charY_pos = 100
@@ -93,7 +91,7 @@ def main():
     
 
     #Music
-    muzic = pygame.mixer.Sound('mainMusic.mp3')
+    muzic = pygame.mixer.Sound('./audio_assets/mainMusic.mp3')
 
     slimes = []
 
