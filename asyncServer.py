@@ -182,7 +182,7 @@ def playerHandler(sock, host, port, lock, playerKey, friends):
        
         if timeoutStreak > 100:
             print("player disconnected")
-            msg = {"status": "DEADCONN", "playerKey": playerKey}
+            msg = {"status": "DEADCLIENT", "playerKey": playerKey}
             msg = json.dumps(msg)
             length = msgLength(msg)
             try:
@@ -211,7 +211,7 @@ def playerHandler(sock, host, port, lock, playerKey, friends):
             
 
         if exit:
-            msg = {"status": "DEADCONN", "playerKey": playerKey}
+            msg = {"status": "DEADCLIENT", "playerKey": playerKey}
             msg = json.dumps(msg)
             length = msgLength(msg)
             try:
@@ -365,7 +365,7 @@ def gameInit(connection, playerKey, friends):
 
     threadSock.listen(1)
     msg = {"host": threadHost, "port": threadPort}
-    print(f"sending {threadHost} and {threadPort}")
+    
     
     msg = json.dumps(msg)
     length = msgLength(msg)
@@ -957,7 +957,7 @@ def main():
                 global SLIME_HEIGHT
                 SLIME_WIDTH = message["dimensions"]["slime"][0]
                 SLIME_HEIGHT = message["dimensions"]["slime"][1]
-                print(message)
+                
                 res = "GOOD"
                 
                 fr = [x for x in threadData.keys()]
@@ -991,7 +991,7 @@ def main():
                     length = int(length.decode("utf-8"))
                     msg = s.recv(length)
                 except Exception as e:
-                    print(e)
+                    
                     if s in inputs:
                         inputs.remove(s)
                     s.close()
@@ -1008,24 +1008,35 @@ def main():
                     
                     del threadData[msg["playerKey"]]
                     fr = [x for x in threadData.keys()]
-                    future = gameInit(s, msg["playerKey"], fr)
-                    if not future:
-                        print("gameInit failure")
-                        return msg["playerKey"]
-                    threads.append(future)
+                    while True:
+
+                        future = gameInit(s, msg["playerKey"], fr)
+                        if not future:
+                            print("gameInit failure")
+                            continue
+                        threads.append(future)
+                        break
+                
                     
 
                 elif msg["status"] == "DEADCLIENT":
                     ##If thread tells server that client died, server will delete client from the game and the thread will kill itself
                     playerKey = msg["playerKey"]
-                    del globalGame[playerKey]
+                    if playerKey in globalGame:
+                        
+                        del globalGame[playerKey]
+                    if playerKey in threadData:
+                        
+                        del threadData[playerKey]
                     if s in inputs:
                         inputs.remove(s)
                     s.close()
 
                 elif msg["status"] == "CLIENTEXIT":
                     playerKey = msg["playerKey"]
-                    del globalGame[playerKey]
+                    if playerKey in globalGame:
+                        del globalGame[playerKey]
+                    
                     if s in inputs:
                         print("client successfully exitted from game")
                         inputs.remove(s)
