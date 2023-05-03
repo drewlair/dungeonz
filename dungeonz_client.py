@@ -29,6 +29,7 @@ def you_died(screen):
 
 def main():
     
+    # get vars from command line 
     try:
         port = int(sys.argv[2])
     except:
@@ -70,7 +71,7 @@ def main():
     
     gameState = defaultdict(dict)
     
-    # init default gameState
+    # init images
 
     characterImages = {}
     characterImages["stanceRightMain"] = stanceRightMain
@@ -81,8 +82,7 @@ def main():
     characterImages["swingRightFinish"] = swingRightFinish
     characterImages["swingRightFinal"] = swingRightFinal
     characterImages["hurtRight"] = hurtRight
-
-    #Monster stuff
+    
     monsterImages = {}
     monsterImages["slime"] = slime_surf
     operations = 0
@@ -93,9 +93,8 @@ def main():
     slimes = []
 
     # init default gameState
-    
     # each player gets own key 
-    gameState["playerKey"] = str(random.randint(0,100000000000000))
+    gameState["playerKey"] = str(random.randint(0,10000000000000000))
     gameState["background"] = "background_surf"
     gameState["borders"] = (xBorderMax, yBorderMax)
     gameState["character"] = "stanceRightMain"
@@ -112,6 +111,8 @@ def main():
     clientSock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     clientSock.settimeout(120)
     breakMainWhile = False
+    
+    # continuously try to connect to the server
     while True:
         
         if not breakMainWhile:
@@ -125,6 +126,8 @@ def main():
             print(f"Successfully connected to {host} at port {str(port)}")
 
         breakMainWhile = False
+        
+        # prepare and send msg to server
         msg = defaultdict(dict)
         msg["dimensions"]["slime"] = (slime_width, slime_height)
         msg["playerKey"] = gameState["playerKey"]
@@ -141,7 +144,8 @@ def main():
         except:
             print("Failed to send initialized state to server")
             continue
-        
+            
+        # response from the server
         try:
             length = clientSock.recv(8)
             
@@ -157,16 +161,21 @@ def main():
 
         msg = json.loads(msg)
 
+        # create new socket for the thread
         threadSock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         threadSock.settimeout(5)
         host = msg["host"]
         port = msg["port"]
+        
+        # connect to server thread
         try:
             print(f"host is {host}, {port}")
             threadSock.connect((msg["host"], int(msg["port"])))
         except:
             print("Error connecting to server Thread")
             continue
+        
+        # send init to server thread
         msg = "INIT"
         length = msgLength(msg)
         try:
@@ -176,6 +185,7 @@ def main():
             print("Error sending init to thread")
             continue
         
+        # this is the server thread's response
         try:
             length = threadSock.recv(8)
             length = int(length.decode())
@@ -191,6 +201,7 @@ def main():
             print("msg not start!")
             continue
         
+   
         muzic.play()
         failStreak = 0
         
@@ -198,10 +209,11 @@ def main():
         friends = []
         while True:
             
-            #Receive user input
+            # Receive user input
             if gameState["isDied"]:
                 time.sleep(3)
                 TOstreak = 0
+                # send CLIENTTEXIT message to the server
                 while TOstreak < 30:
                     try:
                         msg = {}
@@ -221,6 +233,7 @@ def main():
                 pygame.quit()
                 sys.exit()
             
+            # handle failed connection attempts
             if failStreak > 2:
                 failStreak = 0
                 while True:
@@ -264,17 +277,22 @@ def main():
                             print("Error receiving INIT update from server")
                             continue
                     msg = json.loads(msg)
-
+                    
+                    # create a new socket for the thread
                     threadSock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                     threadSock.settimeout(5)
                     host = msg["host"]
                     port = msg["port"]
+                    
+                    # connect to the server thread
                     try:
                         print(f"host is {host}, {port}")
                         threadSock.connect((msg["host"], int(msg["port"])))
                     except:
                         print("Error connecting to server Thread")
                         continue
+                    
+                    # send init msg to server thread
                     msg = "INIT"
                     length = msgLength(msg)
                     try:
@@ -284,6 +302,7 @@ def main():
                         print("Error sending init to thread")
                         continue
                     
+                    # response from server thread
                     try:
                         length = threadSock.recv(8)
                         length = int(length.decode())
@@ -299,7 +318,8 @@ def main():
                         print("Received bad START Message")
                         continue
                     break
-                    
+            
+            # process game events and send updates
             update = {}
             update["playerKey"] = gameState["playerKey"]
             update["status"] = "INPUT"
@@ -331,6 +351,7 @@ def main():
                     clientSock.close()
                     pygame.quit()
                     sys.exit()
+                # process movement and action requests
                 if event.type == pygame.KEYDOWN:
                     if event.key == pygame.K_SPACE:
                         
@@ -365,7 +386,7 @@ def main():
                         update["type"] = "stopRight"
                     
             ####################################
-            #Get collisions
+            # Get collisions
          
             char_rect = characterImages[gameState["character"]].get_rect(topleft=gameState["characterStats"]["XY"])
             
@@ -445,9 +466,6 @@ def main():
                     print("Failed to send updated state to server")
                     failStreak += 1
                     continue
-
-            ###################################
-
             ###################################
             #Receive new Game State from server
 
@@ -473,10 +491,9 @@ def main():
                 continue
 
             failStreak = 0
-            ###################################  
-        
+   
             ##############################
-            #update client gamestate
+            # update client gamestate
 
             for key in serverUpdate.keys():
 
@@ -519,8 +536,6 @@ def main():
                     friends.append(serverUpdate["newClient"])
                     gameState[serverUpdate["newClient"]] = newPlayerInit()
                     
-            ###################################
-
             ###################################
             #Display New Game State
 
