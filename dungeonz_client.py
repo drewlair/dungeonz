@@ -40,8 +40,6 @@ def main():
         print("Need to enter hostname")
         sys.exit()
 
-
-    
     pygame.init()
 
     xBorderMax = 1000
@@ -89,7 +87,6 @@ def main():
     monsterImages["slime"] = slime_surf
     operations = 0
     
-
     #Music
     muzic = pygame.mixer.Sound('./audio_assets/mainMusic.mp3')
 
@@ -111,9 +108,6 @@ def main():
     gameState["isWin"] = False
     gameState["isDied"] = False
 
-    
-
-
     # establish server connection
     clientSock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     clientSock.settimeout(120)
@@ -121,8 +115,6 @@ def main():
     while True:
         
         if not breakMainWhile:
-            
-
             try:
                 clientSock.connect((host, port))
             except Exception as e:
@@ -139,8 +131,7 @@ def main():
         msg = json.dumps(msg)
         try:
             
-            #print(f"about to send {msg}")
-            print(f"with length {msgLength(msg)}")
+            # print(f"with length {msgLength(msg)}")
             length = msgLength(msg)
             clientSock.sendall(length.encode("utf-8"))
             
@@ -164,8 +155,6 @@ def main():
             print("Error receiving INIT update from server")
             continue
 
-            
-        
         msg = json.loads(msg)
 
         threadSock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -176,7 +165,7 @@ def main():
             print(f"host is {host}, {port}")
             threadSock.connect((msg["host"], int(msg["port"])))
         except:
-            print("Error conncting to server Thread")
+            print("Error connecting to server Thread")
             continue
         msg = "INIT"
         length = msgLength(msg)
@@ -209,8 +198,6 @@ def main():
         friends = []
         while True:
             
-
-            ######################################
             #Receive user input
             if gameState["isDied"]:
                 time.sleep(3)
@@ -246,15 +233,10 @@ def main():
                         clientSock.sendall(length.encode("utf-8"))
                         clientSock.sendall(msg.encode("utf-8"))
                         
-                        
-                        
                     except:
                         print("Error sending deadthread msg to server")
                         break
 
-                    
-                    
-                    
                     try:
                         length = clientSock.recv(8)
                         
@@ -268,8 +250,6 @@ def main():
                         print("Error receiving INIT update from server")
                         continue
 
-                        
-                    
                     if msg == "GOOD":
                         try:
                             length = clientSock.recv(8)
@@ -293,7 +273,7 @@ def main():
                         print(f"host is {host}, {port}")
                         threadSock.connect((msg["host"], int(msg["port"])))
                     except:
-                        print("Error conncting to server Thread")
+                        print("Error connecting to server Thread")
                         continue
                     msg = "INIT"
                     length = msgLength(msg)
@@ -320,8 +300,6 @@ def main():
                         continue
                     break
                     
-
-
             update = {}
             update["playerKey"] = gameState["playerKey"]
             update["status"] = "INPUT"
@@ -333,7 +311,6 @@ def main():
                     latency = ((endtime - startTime) / operations) / 10**9
                     print(f"system latency was {latency} sec / ops")
 
-
                     msg = {"status": "CLIENTEXIT", "playerKey": gameState["playerKey"]}
                     msg = json.dumps(msg)
                     length = msgLength(msg)
@@ -341,7 +318,6 @@ def main():
                     while TOstreak < 30:
                         try:
                             clientSock.sendall(length.encode("utf-8"))
-
 
                             clientSock.sendall(msg.encode("utf-8"))
                             break
@@ -388,9 +364,6 @@ def main():
                         
                         update["type"] = "stopRight"
                     
-                
-
-
             ####################################
             #Get collisions
          
@@ -416,7 +389,6 @@ def main():
                             else:
                                 
                                 update["collisions"] = [("slimes", slimeI)]
-
                                 
                 elif monster == "bats":
                     for batI, bat in enumerate(gameState["monsters"]["bats"]):
@@ -442,18 +414,6 @@ def main():
                 
                 update["attack"] = enemies
             
-
-            
-            
-
-
-
-
-
-            ####################################
-
-
-                
             ####################################
             #Send update to server
             
@@ -473,7 +433,6 @@ def main():
                     failStreak += 1
                     continue
                     
-
             else:
                 msg = json.dumps(update)
                 length = msgLength(msg)
@@ -487,10 +446,7 @@ def main():
                     failStreak += 1
                     continue
 
-                
-
             ###################################
-
 
             ###################################
             #Receive new Game State from server
@@ -510,7 +466,6 @@ def main():
                 update = update.decode()
              
                 serverUpdate = json.loads(update)
-
                 
             except OSError:
                 print("Error receiving update from server thread")
@@ -520,7 +475,6 @@ def main():
             failStreak = 0
             ###################################  
         
-
             ##############################
             #update client gamestate
 
@@ -565,11 +519,7 @@ def main():
                     friends.append(serverUpdate["newClient"])
                     gameState[serverUpdate["newClient"]] = newPlayerInit()
                     
-
-                
-                
             ###################################
-
 
             ###################################
             #Display New Game State
@@ -588,7 +538,6 @@ def main():
                 if key not in serverUpdate:
                     friends.remove(key)
                     continue
-                
                 
                 screen.blit(characterImages[serverUpdate[key][0]], serverUpdate[key][1])
 
@@ -615,9 +564,6 @@ def main():
             pygame.display.update()
             clock.tick(60)
 
-
-
-
 def msgLength(msg):
     
     length = str(len(msg))
@@ -634,8 +580,8 @@ def newPlayerInit():
     newRes["isSwinging"] = False
     newRes["isHurt"] = False
 
-
     return newRes
 
 if __name__ == "__main__":
     main()
+
