@@ -1,4 +1,5 @@
-Dungeonz
+Dungeonz - A Distributed Hack and Slash Game developed using Python and Pygame
+Michael Bai, Drew Lair
 
 How to run:
 1. Create two sperate terminals in the "dungeonz" main directory.
