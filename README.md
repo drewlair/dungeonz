@@ -4,7 +4,7 @@ How to play:
 1. Create two sperate terminals in the "dungeonz" main directory.
 2. For the first terminal, run the command "python dungeonz_server.py <port#>".
   - fill in <port#> with the port you want your server.
-  - ensure that you are connected to a server with no private firewall (ND-guest). 
+  - ensure that you are connected to a server with no private firewall (ex: ND-guest). 
   - if there is a binding error, try using a different port (8080 or 1024 for example are usually open ports for users on many devices).
 3. If the server connects successfully, it should print out a statement: "connected to <hostname> on port <port#>".
   - Make sure you are connected to a network that allows for user programs to send socket messages before running the program.
