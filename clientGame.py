@@ -128,7 +128,6 @@ def main():
             try:
                 clientSock.connect((host, port))
             except Exception as e:
-                print(e)
                 print("Error connecting to server")
                 sys.exit()
                 continue
@@ -164,7 +163,6 @@ def main():
             msg = msg.decode()
 
         except Exception as e:
-            print(e)
             print("Error receiving INIT update from server")
             continue
 
@@ -233,7 +231,7 @@ def main():
                     except:
                         print("Error sending deadthread msg to server")
                         TOstreak += 1
-                print("closed")
+                print("closing")
                 clientSock.close()
                 pygame.quit()
                 sys.exit()
@@ -250,7 +248,7 @@ def main():
                         clientSock.sendall(length.encode("utf-8"))
                         clientSock.sendall(msg.encode("utf-8"))
                         
-                        print("out of failstreak")
+                        
                         
                     except:
                         print("Error sending deadthread msg to server")
@@ -269,12 +267,11 @@ def main():
                         msg = msg.decode()
 
                     except Exception as e:
-                        print(e)
                         print("Error receiving INIT update from server")
                         continue
 
                         
-                    print(msg)
+                    
                     if msg == "GOOD":
                         try:
                             length = clientSock.recv(8)
@@ -286,7 +283,6 @@ def main():
                             msg = msg.decode()
 
                         except Exception as e:
-                            print(e)
                             print("Error receiving INIT update from server")
                             continue
                     msg = json.loads(msg)
@@ -322,8 +318,7 @@ def main():
                     if msg == "START":
                         print("lets play!")
                     else:
-                        print("msg not start")
-                        print(msg)
+                        print("Received bad START Message")
                         continue
                     break
                     
@@ -357,7 +352,7 @@ def main():
                             TOstreak += 1
                             time.sleep(1)
 
-                    print("closed")
+                    print("closing")
                     time.sleep(3)
                     clientSock.close()
                     pygame.quit()
@@ -595,7 +590,7 @@ def main():
                 if key not in serverUpdate:
                     friends.remove(key)
                     continue
-                print(serverUpdate)
+                
                 
                 screen.blit(characterImages[serverUpdate[key][0]], serverUpdate[key][1])
 
