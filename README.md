@@ -1,8 +1,8 @@
 # Dungeonz
-## A Distributed Hack and Slash Game developed using Python and Pygame
+### A Distributed Hack and Slash Game developed in Python
 ### By Drew Lair and Michael Bai
 
-## Game Demo: https://www.youtube.com/watch?v=iKZvovviQ_o
+### Game Demo: https://www.youtube.com/watch?v=iKZvovviQ_o
 
 ### How to run:
 1. Create two sperate terminals in the "dungeonz" main directory.
