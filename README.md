@@ -1,6 +1,8 @@
 Dungeonz - A Distributed Hack and Slash Game developed using Python and Pygame
 Michael Bai, Drew Lair
 
+Game Demo: https://www.youtube.com/watch?v=iKZvovviQ_o
+
 How to run:
 1. Create two sperate terminals in the "dungeonz" main directory.
 2. For the first terminal, run the command "python dungeonz_server.py <port#>".
